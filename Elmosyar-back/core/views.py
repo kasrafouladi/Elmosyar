@@ -10,9 +10,38 @@ import json
 from datetime import timedelta
 
 from .models import User
+from .models import Post, PostMedia, Like, Comment, Notification
+import mimetypes
+
+
+def serialize_post(post):
+    media_list = []
+    for m in post.media.all():
+        media_list.append({
+            'id': m.id,
+            'url': m.file.url if m.file else '',
+            'type': m.media_type,
+        })
+    return {
+        'id': post.id,
+        'author': post.author.username,
+        'content': post.content,
+        'created_at': post.created_at.isoformat(),
+        'tags': [t.strip() for t in post.tags.split(',')] if post.tags else [],
+        'mentions': [u.username for u in post.mentions.all()],
+        'media': media_list,
+        'likes_count': post.likes.count(),
+        'comments_count': post.comments.count(),
+        'reposts_count': post.reposts.count(),
+        'is_repost': post.is_repost,
+        'original_post_id': post.original_post.id if post.original_post else None,
+    }
 
 
 @require_http_methods(["GET"])
+
+def posts_page(request):
+    return render(request, 'posts.html')
 def index(request):
     return render(request, "index.html")
 
@@ -32,13 +61,13 @@ def signup(request):
                 'success': False,
                 'message': 'All fields are required'
             }, status=400)
-
-        if not email.endswith('@iust.ac.ir'):
+        """
+        if not email.endswith('iust.ac.ir'):
             return JsonResponse({
                 'success': False,
                 'message': 'Email must be from iust.ac.ir domain'
             }, status=400)
-
+        """
         if password != password_confirm:
             return JsonResponse({
                 'success': False,
@@ -74,13 +103,14 @@ def signup(request):
         user.email_verification_sent_at = timezone.now()
         user.save()
 
-        verification_link = f"{request.build_absolute_uri('/')}/verify-email/{verification_token}/"
+        host = request.scheme + '://' + request.get_host()
+        verification_link = f"{host}/api/verify-email/{verification_token}/"
         send_mail(
             'Email Verification',
             f'Click this link to verify your email: {verification_link}',
             settings.DEFAULT_FROM_EMAIL or 'noreply@example.com',
             [user.email],
-            fail_silently=True,
+            fail_silently=False,
         )
 
         return JsonResponse({
@@ -99,6 +129,147 @@ def signup(request):
             'success': False,
             'message': str(e)
         }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def posts_list_create(request):
+    # GET: list posts, POST: create post (multipart)
+    if request.method == 'GET':
+        posts = Post.objects.select_related('author').prefetch_related('media', 'mentions').order_by('-created_at')[:100]
+        return JsonResponse({'success': True, 'posts': [serialize_post(p) for p in posts]})
+
+    # POST
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
+
+    content = request.POST.get('content', '').strip()
+    tags = request.POST.get('tags', '').strip()
+    mentions_raw = request.POST.get('mentions', '').strip()
+
+    if not content and not request.FILES:
+        return JsonResponse({'success': False, 'message': 'Post content or media required'}, status=400)
+
+    post = Post.objects.create(author=request.user, content=content, tags=tags)
+
+    # handle mentions
+    if mentions_raw:
+        usernames = [u.strip() for u in mentions_raw.split(',') if u.strip()]
+        mentioned_users = User.objects.filter(username__in=usernames)
+        for mu in mentioned_users:
+            post.mentions.add(mu)
+            if mu != request.user:
+                Notification.objects.create(recipient=mu, sender=request.user, notif_type='mention', post=post, message=f'{request.user.username} mentioned you')
+
+    # handle media files
+    for f in request.FILES.getlist('media'):
+        ctype = f.content_type or mimetypes.guess_type(f.name)[0] or ''
+        if ctype.startswith('image/'):
+            mtype = 'image'
+        elif ctype.startswith('video/'):
+            mtype = 'video'
+        elif ctype.startswith('audio/'):
+            mtype = 'audio'
+        else:
+            mtype = 'file'
+        pm = PostMedia.objects.create(post=post, file=f, media_type=mtype)
+
+    return JsonResponse({'success': True, 'post': serialize_post(post)}, status=201)
+
+
+@require_http_methods(["GET"])
+def post_detail(request, post_id):
+    post = get_object_or_404(Post, id=post_id)
+    return JsonResponse({'success': True, 'post': serialize_post(post)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def post_like(request, post_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
+    post = get_object_or_404(Post, id=post_id)
+    like = Like.objects.filter(user=request.user, post=post).first()
+    if like:
+        like.delete()
+        return JsonResponse({'success': True, 'message': 'Unliked', 'likes_count': post.likes.count()})
+    else:
+        Like.objects.create(user=request.user, post=post)
+        # notify post author
+        if post.author != request.user:
+            Notification.objects.create(recipient=post.author, sender=request.user, notif_type='like', post=post, message=f'{request.user.username} liked your post')
+        return JsonResponse({'success': True, 'message': 'Liked', 'likes_count': post.likes.count()})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def post_comment(request, post_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
+    post = get_object_or_404(Post, id=post_id)
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
+    content = data.get('content', '').strip()
+    parent_id = data.get('parent')
+    if not content:
+        return JsonResponse({'success': False, 'message': 'Comment content required'}, status=400)
+    parent = None
+    if parent_id:
+        parent = Comment.objects.filter(id=parent_id, post=post).first()
+    comment = Comment.objects.create(user=request.user, post=post, content=content, parent=parent)
+    # notify post author
+    if post.author != request.user:
+        Notification.objects.create(recipient=post.author, sender=request.user, notif_type='comment', post=post, comment=comment, message=f'{request.user.username} commented on your post')
+    return JsonResponse({'success': True, 'comment_id': comment.id, 'comments_count': post.comments.count()})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def post_repost(request, post_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
+    post = get_object_or_404(Post, id=post_id)
+    new_post = Post.objects.create(author=request.user, content=post.content, is_repost=True, original_post=post, tags=post.tags)
+    # notify original author
+    if post.author != request.user:
+        Notification.objects.create(recipient=post.author, sender=request.user, notif_type='repost', post=post, message=f'{request.user.username} reposted your post')
+    return JsonResponse({'success': True, 'post': serialize_post(new_post)})
+
+
+@require_http_methods(["GET"])
+def notifications_list(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
+    notifs = Notification.objects.filter(recipient=request.user).order_by('-created_at')[:100]
+    data = []
+    for n in notifs:
+        data.append({
+            'id': n.id,
+            'sender': n.sender.username,
+            'type': n.notif_type,
+            'post_id': n.post.id if n.post else None,
+            'comment_id': n.comment.id if n.comment else None,
+            'message': n.message,
+            'is_read': n.is_read,
+            'created_at': n.created_at.isoformat(),
+        })
+    return JsonResponse({'success': True, 'notifications': data})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def notifications_mark_read(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
+    ids = data.get('ids', [])
+    Notification.objects.filter(recipient=request.user, id__in=ids).update(is_read=True)
+    return JsonResponse({'success': True})
 
 
 @csrf_exempt
@@ -288,13 +459,14 @@ def request_password_reset(request):
             user.password_reset_sent_at = timezone.now()
             user.save()
 
-            reset_link = f"{request.build_absolute_uri('/')}/reset-password/{reset_token}/"
+            host = request.scheme + '://' + request.get_host()
+            reset_link = f"{host}/api/password-reset/{reset_token}/"
             send_mail(
                 'Password Reset Request',
                 f'Click this link to reset your password: {reset_link}',
                 settings.DEFAULT_FROM_EMAIL or 'noreply@example.com',
                 [user.email],
-                fail_silently=True,
+                fail_silently=False,
             )
 
         return JsonResponse({

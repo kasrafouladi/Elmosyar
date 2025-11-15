@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Posts</title>
+</head>
+<body>
+    <h1>LinkedIn-like Posts</h1>
+    <div id="new-post">
+        <h2>Create New Post</h2>
+        <form id="post-form" enctype="multipart/form-data">
+            <textarea id="post-content" placeholder="What's on your mind?" required></textarea><br>
+            <input type="file" id="post-media" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.zip,.rar"><br>
+            <input type="text" id="post-tags" placeholder="Tags (comma separated)"><br>
+            <input type="text" id="post-mentions" placeholder="Mentions (comma separated usernames)"><br>
+            <button type="submit">Post</button>
+        </form>
+        <div id="post-message"></div>
+    </div>
+    <hr>
+    <div id="posts-list">
+        <h2>All Posts</h2>
+        <div id="posts-container"></div>
+    </div>
+    <script>
+        // Helper to render media
+        function renderMedia(media) {
+            if (!media || !media.url) return '';
+            if (media.type.startsWith('image/')) {
+                return `<img src="${media.url}" style="max-width:300px;">`;
+            } else if (media.type.startsWith('video/')) {
+                return `<video src="${media.url}" controls style="max-width:300px;"></video>`;
+            } else if (media.type.startsWith('audio/')) {
+                return `<audio src="${media.url}" controls></audio>`;
+            } else {
+                return `<a href="${media.url}" target="_blank">Download file</a>`;
+            }
+        }
+
+        // Fetch and render posts
+        async function fetchPosts() {
+            const res = await fetch('/api/posts/');
+            const data = await res.json();
+            const container = document.getElementById('posts-container');
+            container.innerHTML = '';
+            if (data.success && data.posts.length) {
+                data.posts.forEach(post => {
+                    let mediaHtml = '';
+                    if (post.media && post.media.length) {
+                        mediaHtml = post.media.map(renderMedia).join('<br>');
+                    }
+                    container.innerHTML += `
+                        <div style="border:1px solid #ccc; margin:10px; padding:10px;">
+                            <strong>${post.author}</strong> <span style="color:gray;">${post.created_at}</span><br>
+                            ${post.content}<br>
+                            ${mediaHtml}<br>
+                            <span>Tags: ${post.tags}</span><br>
+                            <span>Mentions: ${post.mentions.join(', ')}</span><br>
+                            <button onclick="likePost(${post.id})">Like (${post.likes_count})</button>
+                            <button onclick="showCommentBox(${post.id})">Comment (${post.comments_count})</button>
+                            <button onclick="repost(${post.id})">Repost (${post.reposts_count})</button>
+                            <div id="comments-${post.id}" style="display:none;"></div>
+                        </div>
+                    `;
+                });
+            } else {
+                container.innerHTML = '<p>No posts yet.</p>';
+            }
+        }
+
+        // Like post
+        async function likePost(postId) {
+            await fetch(`/api/posts/${postId}/like/`, {method:'POST'});
+            fetchPosts();
+        }
+
+        // Repost
+        async function repost(postId) {
+            await fetch(`/api/posts/${postId}/repost/`, {method:'POST'});
+            fetchPosts();
+        }
+
+        // Show comment box
+        function showCommentBox(postId) {
+            const box = document.getElementById(`comments-${postId}`);
+            box.style.display = box.style.display === 'none' ? 'block' : 'none';
+            box.innerHTML = `<textarea id="comment-content-${postId}" placeholder="Write a comment..."></textarea><br>
+                <button onclick="submitComment(${postId})">Submit</button>`;
+        }
+
+        // Submit comment
+        async function submitComment(postId) {
+            const content = document.getElementById(`comment-content-${postId}`).value;
+            await fetch(`/api/posts/${postId}/comment/`, {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({content})
+            });
+            fetchPosts();
+        }
+
+        // Submit new post
+        document.getElementById('post-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const content = document.getElementById('post-content').value;
+            const tags = document.getElementById('post-tags').value;
+            const mentions = document.getElementById('post-mentions').value;
+            const mediaInput = document.getElementById('post-media');
+            const formData = new FormData();
+            formData.append('content', content);
+            formData.append('tags', tags);
+            formData.append('mentions', mentions);
+            for (let file of mediaInput.files) {
+                formData.append('media', file);
+            }
+            const res = await fetch('/api/posts/', {
+                method:'POST',
+                body:formData
+            });
+            const data = await res.json();
+            const msg = document.getElementById('post-message');
+            if (data.success) {
+                msg.style.color = 'green';
+                msg.textContent = 'Post created!';
+                document.getElementById('post-form').reset();
+                fetchPosts();
+            } else {
+                msg.style.color = 'red';
+                msg.textContent = data.message || 'Error creating post.';
+            }
+        });
+
+        // Initial load
+        fetchPosts();
+    </script>
+</body>
+</html>
