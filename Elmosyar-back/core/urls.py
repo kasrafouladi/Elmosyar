@@ -11,4 +11,14 @@ urlpatterns = [
     path('api/profile/update/', views.update_profile, name='update_profile'),
     path('api/password-reset/request/', views.request_password_reset, name='request_password_reset'),
     path('api/password-reset/<str:token>/', views.reset_password, name='reset_password'),
+    # Posts and interactions
+    path('api/posts/', views.posts_list_create, name='posts_list_create'),
+    path('api/posts/<int:post_id>/', views.post_detail, name='post_detail'),
+    path('api/posts/<int:post_id>/like/', views.post_like, name='post_like'),
+    path('api/posts/<int:post_id>/comment/', views.post_comment, name='post_comment'),
+    path('api/posts/<int:post_id>/repost/', views.post_repost, name='post_repost'),
+    # Notifications
+    path('api/notifications/', views.notifications_list, name='notifications_list'),
+    path('api/notifications/mark-read/', views.notifications_mark_read, name='notifications_mark_read'),
+    path('posts/', views.posts_page, name='posts_page'),
 ]

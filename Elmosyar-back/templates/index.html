@@ -13,6 +13,7 @@
             <button onclick="showView('login')">Login</button>
             <button onclick="showView('profile')">Profile</button>
             <button onclick="logoutUser()">Logout</button>
+            <a href="/posts/" id="posts">Posts Page</a>
         </nav>
 
         <!-- Home View -->
@@ -26,7 +27,7 @@
             <h2>Sign Up</h2>
             <form id="signup-form">
                 <input type="text" id="signup-username" placeholder="Username" required>
-                <input type="email" id="signup-email" placeholder="Email (@iust.ac.ir)" required>
+                <input type="email" id="signup-email" placeholder="Email (subdomain@iust.ac.ir)" required>
                 <input type="password" id="signup-password" placeholder="Password (min 8 chars)" required>
                 <input type="password" id="signup-confirm-password" placeholder="Confirm Password" required>
                 <button type="submit">Sign Up</button>
@@ -90,7 +91,8 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:8000';
+        // Get API base URL dynamically from current location
+        const API_BASE = window.location.origin;
 
         function showView(view) {
             document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
@@ -118,11 +120,18 @@
 
             try {
                 const response = await fetch(`${API_BASE}${endpoint}`, options);
+                if (!response.ok) {
+                    const text = await response.text();
+                    console.error('Response error:', response.status, text);
+                    throw new Error(`HTTP ${response.status}: ${text}`);
+                }
                 const result = await response.json();
                 return { status: response.status, data: result };
             } catch (error) {
                 console.error('API Error:', error);
-                return { status: 500, data: { success: false, message: error.message } };
+                console.error('API_BASE:', API_BASE);
+                console.error('Endpoint:', endpoint);
+                return { status: 500, data: { success: false, message: `Error: ${error.message}` } };
             }
         }
 
