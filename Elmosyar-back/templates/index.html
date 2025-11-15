@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth System</title>
+</head>
+<body>
+    <div id="app">
+        <nav>
+            <button onclick="showView('home')">Home</button>
+            <button onclick="showView('signup')">Sign Up</button>
+            <button onclick="showView('login')">Login</button>
+            <button onclick="showView('profile')">Profile</button>
+            <button onclick="logoutUser()">Logout</button>
+        </nav>
+
+        <!-- Home View -->
+        <div id="home-view" class="view">
+            <h1>Welcome to Auth System</h1>
+            <p>Use the navigation buttons above to navigate.</p>
+        </div>
+
+        <!-- Sign Up View -->
+        <div id="signup-view" class="view" style="display:none;">
+            <h2>Sign Up</h2>
+            <form id="signup-form">
+                <input type="text" id="signup-username" placeholder="Username" required>
+                <input type="email" id="signup-email" placeholder="Email (@iust.ac.ir)" required>
+                <input type="password" id="signup-password" placeholder="Password (min 8 chars)" required>
+                <input type="password" id="signup-confirm-password" placeholder="Confirm Password" required>
+                <button type="submit">Sign Up</button>
+            </form>
+            <div id="signup-message"></div>
+        </div>
+
+        <!-- Email Verification View -->
+        <div id="verify-view" class="view" style="display:none;">
+            <h2>Email Verification</h2>
+            <p>Check your email for verification link or enter the token:</p>
+            <input type="text" id="verify-token" placeholder="Verification Token">
+            <button onclick="verifyEmail()">Verify</button>
+            <div id="verify-message"></div>
+        </div>
+
+        <!-- Login View -->
+        <div id="login-view" class="view" style="display:none;">
+            <h2>Login</h2>
+            <form id="login-form">
+                <input type="text" id="login-username" placeholder="Username or Email" required>
+                <input type="password" id="login-password" placeholder="Password" required>
+                <button type="submit">Login</button>
+            </form>
+            <button onclick="showView('forgot-password')">Forgot Password?</button>
+            <div id="login-message"></div>
+        </div>
+
+        <!-- Forgot Password View -->
+        <div id="forgot-password-view" class="view" style="display:none;">
+            <h2>Forgot Password</h2>
+            <input type="email" id="forgot-email" placeholder="Enter your email">
+            <button onclick="requestPasswordReset()">Send Reset Link</button>
+            <div id="forgot-message"></div>
+        </div>
+
+        <!-- Reset Password View -->
+        <div id="reset-password-view" class="view" style="display:none;">
+            <h2>Reset Password</h2>
+            <input type="text" id="reset-token" placeholder="Reset Token">
+            <input type="password" id="reset-password" placeholder="New Password (min 8 chars)">
+            <input type="password" id="reset-confirm-password" placeholder="Confirm Password">
+            <button onclick="resetPassword()">Reset Password</button>
+            <div id="reset-message"></div>
+        </div>
+
+        <!-- Profile View -->
+        <div id="profile-view" class="view" style="display:none;">
+            <h2>User Profile</h2>
+            <div id="profile-info"></div>
+            <h3>Edit Profile</h3>
+            <form id="profile-form">
+                <input type="text" id="profile-first-name" placeholder="First Name">
+                <input type="text" id="profile-last-name" placeholder="Last Name">
+                <input type="text" id="profile-student-id" placeholder="Student ID">
+                <textarea id="profile-bio" placeholder="Bio" rows="4"></textarea>
+                <button type="submit">Update Profile</button>
+            </form>
+            <div id="profile-message"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+
+        function showView(view) {
+            document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
+            const viewElement = document.getElementById(view + '-view');
+            if (viewElement) {
+                viewElement.style.display = 'block';
+                if (view === 'profile') {
+                    loadProfile();
+                }
+            }
+        }
+
+        async function apiCall(endpoint, method = 'GET', data = null) {
+            const options = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include'
+            };
+
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}${endpoint}`, options);
+                const result = await response.json();
+                return { status: response.status, data: result };
+            } catch (error) {
+                console.error('API Error:', error);
+                return { status: 500, data: { success: false, message: error.message } };
+            }
+        }
+
+        // Sign Up
+        document.getElementById('signup-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('signup-username').value;
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            const password_confirm = document.getElementById('signup-confirm-password').value;
+
+            const result = await apiCall('/api/signup/', 'POST', {
+                username, email, password, password_confirm
+            });
+
+            const message = document.getElementById('signup-message');
+            if (result.data.success) {
+                message.style.color = 'green';
+                message.textContent = result.data.message + ' Check /verify-email to verify.';
+                document.getElementById('signup-form').reset();
+            } else {
+                message.style.color = 'red';
+                message.textContent = result.data.message;
+            }
+        });
+
+        // Verify Email
+        async function verifyEmail() {
+            const token = document.getElementById('verify-token').value;
+            if (!token) {
+                alert('Please enter verification token');
+                return;
+            }
+            const result = await apiCall(`/api/verify-email/${token}/`, 'GET');
+            const message = document.getElementById('verify-message');
+            if (result.data.success) {
+                message.style.color = 'green';
+                message.textContent = result.data.message;
+            } else {
+                message.style.color = 'red';
+                message.textContent = result.data.message;
+            }
+        }
+
+        // Login
+        document.getElementById('login-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username_or_email = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+
+            const result = await apiCall('/api/login/', 'POST', {
+                username_or_email, password
+            });
+
+            const message = document.getElementById('login-message');
+            if (result.data.success) {
+                message.style.color = 'green';
+                message.textContent = result.data.message;
+                localStorage.setItem('user', JSON.stringify(result.data.user));
+                document.getElementById('login-form').reset();
+                setTimeout(() => showView('profile'), 1000);
+            } else {
+                message.style.color = 'red';
+                message.textContent = result.data.message;
+            }
+        });
+
+        // Logout
+        async function logoutUser() {
+            const result = await apiCall('/api/logout/', 'POST');
+            if (result.data.success) {
+                localStorage.removeItem('user');
+                showView('home');
+                alert('Logged out successfully');
+            }
+        }
+
+        // Forgot Password
+        async function requestPasswordReset() {
+            const email = document.getElementById('forgot-email').value;
+            if (!email) {
+                alert('Please enter your email');
+                return;
+            }
+            const result = await apiCall('/api/password-reset/request/', 'POST', { email });
+            const message = document.getElementById('forgot-message');
+            if (result.data.success) {
+                message.style.color = 'green';
+                message.textContent = result.data.message;
+                document.getElementById('forgot-email').value = '';
+            } else {
+                message.style.color = 'red';
+                message.textContent = result.data.message;
+            }
+        }
+
+        // Reset Password
+        async function resetPassword() {
+            const token = document.getElementById('reset-token').value;
+            const password = document.getElementById('reset-password').value;
+            const password_confirm = document.getElementById('reset-confirm-password').value;
+
+            if (!token || !password || !password_confirm) {
+                alert('Please fill all fields');
+                return;
+            }
+
+            const result = await apiCall(`/api/password-reset/${token}/`, 'POST', {
+                password, password_confirm
+            });
+
+            const message = document.getElementById('reset-message');
+            if (result.data.success) {
+                message.style.color = 'green';
+                message.textContent = result.data.message;
+                document.getElementById('reset-token').value = '';
+                document.getElementById('reset-password').value = '';
+                document.getElementById('reset-confirm-password').value = '';
+                setTimeout(() => showView('login'), 2000);
+            } else {
+                message.style.color = 'red';
+                message.textContent = result.data.message;
+            }
+        }
+
+        // Get Profile
+        async function loadProfile() {
+            const result = await apiCall('/api/profile/', 'GET');
+            const profileInfo = document.getElementById('profile-info');
+
+            if (result.data.success) {
+                const user = result.data.user;
+                profileInfo.innerHTML = `
+                    <p><strong>Username:</strong> ${user.username}</p>
+                    <p><strong>Email:</strong> ${user.email}</p>
+                    <p><strong>Email Verified:</strong> ${user.is_email_verified ? 'Yes' : 'No'}</p>
+                    <p><strong>First Name:</strong> ${user.first_name || 'Not set'}</p>
+                    <p><strong>Last Name:</strong> ${user.last_name || 'Not set'}</p>
+                    <p><strong>Student ID:</strong> ${user.student_id || 'Not set'}</p>
+                    <p><strong>Bio:</strong> ${user.bio || 'Not set'}</p>
+                `;
+
+                document.getElementById('profile-first-name').value = user.first_name || '';
+                document.getElementById('profile-last-name').value = user.last_name || '';
+                document.getElementById('profile-student-id').value = user.student_id || '';
+                document.getElementById('profile-bio').value = user.bio || '';
+            } else {
+                profileInfo.innerHTML = '<p style="color:red;">Please login to view profile</p>';
+            }
+        }
+
+        // Update Profile
+        document.getElementById('profile-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                first_name: document.getElementById('profile-first-name').value,
+                last_name: document.getElementById('profile-last-name').value,
+                student_id: document.getElementById('profile-student-id').value,
+                bio: document.getElementById('profile-bio').value,
+            };
+
+            const result = await apiCall('/api/profile/update/', 'POST', data);
+            const message = document.getElementById('profile-message');
+
+            if (result.data.success) {
+                message.style.color = 'green';
+                message.textContent = result.data.message;
+                setTimeout(() => loadProfile(), 1000);
+            } else {
+                message.style.color = 'red';
+                message.textContent = result.data.message;
+            }
+        });
+
+        // Initialize
+        showView('home');
+    </script>
+</body>
+</html>

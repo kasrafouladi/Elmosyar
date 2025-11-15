@@ -44,10 +44,14 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_browser_reload",
+    "corsheaders",
+    "rest_framework",
+    "Elmosyar-back.core",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -59,12 +63,12 @@ MIDDLEWARE = [
 
 X_FRAME_OPTIONS = "ALLOW-FROM preview.app.github.dev"
 
-ROOT_URLCONF = "hello_world.urls"
+ROOT_URLCONF = "Elmosyar-back.urls"
 
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "hello_world" / "templates"],
+        "DIRS": [BASE_DIR / "Elmosyar-back" / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -77,7 +81,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "hello_world.wsgi.application"
+WSGI_APPLICATION = "Elmosyar-back.wsgi.application"
 
 
 # Database
@@ -126,17 +130,37 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATICFILES_DIRS = [
-    BASE_DIR / "hello_world" / "static",
+    BASE_DIR / "Elmosyar-back" / "static",
 ]
 
 STATIC_URL = "static/"
-STATIC_ROOT = BASE_DIR / "hello_world" / "staticfiles"
+STATIC_ROOT = BASE_DIR / "Elmosyar-back" / "staticfiles"
 
 MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "hello_world" / "media"
+MEDIA_ROOT = BASE_DIR / "Elmosyar-back" / "media"
 
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+AUTH_USER_MODEL = "core.User"
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
+    ],
+}
+
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
