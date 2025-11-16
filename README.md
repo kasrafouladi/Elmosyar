@@ -54,7 +54,7 @@ A Django-based authentication backend API with user registration, email verifica
 
 ## Project Structure
 
-```
+```text
 codespaces-django/
 ├── Elmosyar-back/              # Main Django project
 │   ├── core/                   # Core authentication app
@@ -401,6 +401,71 @@ requirements.txt                # Python packages
 - Simple HTML + vanilla JavaScript for testing
 - SQLite database for development
 - Full REST API ready for frontend integration
+
+## Entity Relationship Diagram (ERD)
+
+Below is the ER diagram for the main models in this Django backend. This diagram shows the tables, fields, and relationships (FK/M2M) between entities.
+
+```mermaid
+erDiagram
+    USER {
+        int id PK
+        string username
+        string email
+        string password
+        string first_name
+        string last_name
+        string student_id
+        string bio
+        string profile_picture
+        bool is_email_verified
+        string email_verification_token
+        string password_reset_token
+        datetime created_at
+        datetime updated_at
+    }
+    POST {
+        int id PK
+        string content
+        datetime created_at
+        string tags
+        bool is_repost
+    }
+    POSTMEDIA {
+        int id PK
+        string file
+        string media_type
+    }
+    LIKE {
+        int id PK
+    }
+    COMMENT {
+        int id PK
+        string content
+        datetime created_at
+    }
+    NOTIFICATION {
+        int id PK
+        string notif_type
+        string message
+        bool is_read
+        datetime created_at
+    }
+
+    USER ||--o{ POST : author
+    USER ||--o{ COMMENT : author
+    USER ||--o{ LIKE : user
+    USER ||--o{ NOTIFICATION : recipient
+    USER ||--o{ NOTIFICATION : sender
+    POST ||--o{ POSTMEDIA : media
+    POST ||--o{ LIKE : likes
+    POST ||--o{ COMMENT : comments
+    POST ||--o{ NOTIFICATION : post
+    POST ||--o{ POST : original_post
+    COMMENT ||--o{ NOTIFICATION : comment
+    COMMENT ||--o{ COMMENT : parent
+    POST ||--o{ USER : mentions
+```
 
 ## Support
 
