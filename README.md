@@ -1,454 +1,473 @@
-# GitHub Codespaces ♥️ Django
+# Elmosyar-back
 
-Welcome to your shiny new Codespace running Django! We've got everything fired up and running for you to explore Django.
+A Django-based authentication backend API providing user registration, email verification, login, profile management, and password reset functionality. Designed for local development with an easy setup and a production checklist.
 
-You've got a blank canvas to work on from a git perspective as well. There's a single initial commit with what you're seeing right now - where you go from here is up to you!
-
-Everything you do here is contained within this one codespace. There is no repository on GitHub yet. If and when you’re ready you can click "Publish Branch" and we’ll create your repository and push up your project. If you were just exploring then and have no further need for this code then you can simply delete your codespace and it's gone forever.
-
-## installing dependancies
-
-```python
-pip install -r requirements.txt
-# Elmosyar Backend - Authentication System
-
-A Django-based authentication backend API with user registration, email verification, login, profile management, and password reset functionality.
-
-## Features
-
-- **User Registration** (Sign Up)
-	- Username and email validation
-	- IUST email domain verification (`@iust.ac.ir`)
-	- Password confirmation
-	- Email verification before account activation
-
-- **Email Verification**
-	- Token-based email verification
-	- 24-hour token expiration
-	- Email confirmation required before login
-
-- **User Authentication**
-	- Login with username or email
-	- Session-based authentication
-	- Logout functionality
-
-- **Profile Management**
-	- View user profile information
-	- Edit profile fields:
-		- First Name
-		- Last Name
-		- Student ID
-		- Bio (optional)
-	- Email and password are not editable through profile API
-
-- **Password Recovery**
-	- Request password reset via email
-	- Token-based password reset
-	- 1-hour token expiration
-	- Password confirmation required
-
-- **HTTP API**
-	- All communication through HTTP REST endpoints
-	- JSON request/response format
-	- CORS enabled for frontend communication
-```
-## Project Structure
-
-```text
-codespaces-django/
-├── Elmosyar-back/              # Main Django project
-│   ├── core/                   # Core authentication app
-│   │   ├── models.py           # User model with custom fields
-│   │   ├── views.py            # API endpoints
-│   │   ├── urls.py             # URL routing
-│   │   ├── migrations/         # Database migrations
-│   │   └── __init__.py
-│   ├── static/                 # Static files (CSS, JS, images)
-│   ├── templates/              # HTML templates
-│   │   └── index.html          # Testing interface
-│   ├── settings.py             # Django settings
-│   ├── urls.py                 # Main URL configuration
-│   ├── wsgi.py                 # WSGI configuration
-│   ├── asgi.py                 # ASGI configuration
-│   └── __init__.py
-├── manage.py                   # Django management script
-├── requirements.txt            # Python dependencies
-├── db.sqlite3                  # SQLite database (development)
-├── README.md                   # This file
-└── .env.example               # Environment variables template
-```
+## Key Features
+- User registration (IUST email domain: @iust.ac.ir), email verification (24h)
+- Login with username or email; session-based auth; logout
+- Profile view/edit (first/last name, student ID, bio, profile picture)
+- Password reset via email (1h tokens)
+- REST JSON API, CORS enabled, media handling (Pillow)
+- Posts/feed, likes, comments, mentions, notifications (implemented)
 
 ## Prerequisites
+- Python 3.8+
+- pip
+- Virtual environment recommended
 
-- Python 3.8 or higher
-- pip (Python package manager)
-- Virtual environment (recommended)
-
-## Installation & Setup Guide
-
-### Step 1: Clone the Repository
-
+## Quick Setup (development)
+1. Clone repository
 ```bash
 git clone <repository-url>
-cd codespaces-django
+cd Elmosyar-back
 ```
-
-### Step 2: Create and Activate Virtual Environment (Recommended)
-
+2. Create & activate venv, install deps
 ```bash
-# On Linux/Mac
-python3 -m venv venv
-source venv/bin/activate
-
-# On Windows
-python -m venv venv
-venv\Scripts\activate
-```
-
-### Step 3: Install Dependencies
-
-```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
-
-### Step 4: Configure Environment Variables
-
-Copy `.env.example` to `.env`:
-
+3. Configure environment variables
 ```bash
 cp .env.example .env
+# Edit .env: SECRET_KEY, DEBUG, ALLOWED_HOSTS, email settings, etc.
 ```
-
-The default settings should work for local development:
-```
-SECRET_KEY=my_secret_key
-DEBUG=True
-ALLOWED_HOSTS=*
-DB_HOST=127.0.0.1
-DB_PORT=3306
-```
-
-### Step 5: Run Database Migrations
-
-First, ensure the database is clean:
-
+4. Database & admin
 ```bash
-# Remove old database (if exists)
-rm db.sqlite3
-
-# Run migrations
+rm -f db.sqlite3
 python manage.py migrate
-```
-
-### Step 6: Create Superuser/Admin Account
-
-```bash
-python manage.py createsuperuser --username kasra_fouladi --email kasra_fouladi@mathdep.iust.ac.ir --noinput
-```
-
-Then set the password:
-
-```bash
-python set_password.py
-```
-
-**Admin Credentials:**
-- Username: `kasra_fouladi`
-- Email: `kasra_fouladi@mathdep.iust.ac.ir`
-- Password: `Bachegore1_`
-
-### Step 7: Run the Development Server
-
-```bash
-python manage.py runserver
-```
-
-The server will be available at:
-- **Frontend Testing Interface:** http://localhost:8000/
-- **Admin Panel:** http://localhost:8000/admin/
-- **API Base URL:** http://localhost:8000/api/
-
-## Quick Start for Testing
-
-1. Go to http://localhost:8000/ in your browser
-2. Use the navigation buttons to test different features
-3. Check Django console for email verification tokens
-4. Use tokens to verify email and reset passwords
-
-## API Endpoints
-
-### Authentication
-
-#### Sign Up
-```
-POST /api/signup/
-```
-**Request:**
-```json
-{
-	"username": "john_doe",
-	"email": "john@iust.ac.ir",
-	"password": "SecurePass123",
-	"password_confirm": "SecurePass123"
-}
-```
-
-#### Verify Email
-```
-GET /api/verify-email/<token>/
-```
-
-#### Login
-```
-POST /api/login/
-```
-**Request:**
-```json
-{
-	"username_or_email": "john@iust.ac.ir",
-	"password": "SecurePass123"
-}
-```
-
-#### Logout
-```
-POST /api/logout/
-```
-
-### Profile
-
-#### Get Profile
-```
-GET /api/profile/
-```
-
-#### Update Profile
-```
-POST /api/profile/update/
-```
-**Request:**
-```json
-{
-	"first_name": "John",
-	"last_name": "Doe",
-	"student_id": "123456",
-	"bio": "Optional biography"
-}
-```
-
-### Password Reset
-
-#### Request Reset
-```
-POST /api/password-reset/request/
-```
-**Request:**
-```json
-{
-	"email": "john@iust.ac.ir"
-}
-```
-
-#### Reset Password
-```
-POST /api/password-reset/<token>/
-```
-**Request:**
-```json
-{
-	"password": "NewSecurePass123",
-	"password_confirm": "NewSecurePass123"
-}
-```
-
-## User Model
-
-### Required Fields
-- `username` - Unique username
-- `email` - Unique email (@iust.ac.ir domain required)
-- `password` - Hashed password (min 8 characters)
-
-### Optional Fields
-- `first_name` - User's first name
-- `last_name` - User's last name
-- `student_id` - Student ID number
-- `bio` - User biography
-- `profile_picture` - Profile image
-
-### System Fields
-- `is_email_verified` - Email verification status
-- `email_verification_token` - 24-hour expiring token
-- `password_reset_token` - 1-hour expiring token
-- `created_at` - Account creation timestamp
-- `updated_at` - Last update timestamp
-
-## Common Commands
-
-```bash
-# Run development server
-python manage.py runserver
-
-# Create superuser
 python manage.py createsuperuser
+```
+(You can use `--username` and `--email` flags; set password interactively.)
 
-# Create migrations
-python manage.py makemigrations core
+5. Run dev server
+```bash
+python manage.py runserver 0.0.0.0:8000
+```
+Local test URL: http://localhost:8000
 
-# Apply migrations
-python manage.py migrate
-
-# Access Django shell
-python manage.py shell
-
-# Collect static files
-python manage.py collectstatic
-
-# Reset database completely
-rm db.sqlite3
-python manage.py migrate
+## Project structure (overview)
+```
+Elmosyar-back/
+├── core/               # auth app (models, views, urls)
+│   ├── models.py       # User, Post, Comment, Like, Notification models
+│   ├── views.py        # API view functions and logic
+│   ├── urls.py         # URL routing for core endpoints
+│   ├── migrations/     # Database migration files
+│   ├── __init__.py
+│   └── admin.py        # Django admin configuration
+├── templates/          # frontend testing interface
+│   ├── base.html       # base template (optional)
+│   ├── index.html      # main authentication interface
+│   ├── posts.html      # social feed interface
+│   └── components/     # reusable template components
+│       ├── navbar.html
+│       ├── home-view.html
+│       ├── signup-view.html
+│       ├── login-view.html
+│       ├── verify-email-view.html
+│       ├── forgot-password-view.html
+│       ├── reset-password-view.html
+│       ├── profile-view.html
+│       ├── post-form.html
+│       └── post-list.html
+├── static/             # CSS, JavaScript, images
+│   ├── css/
+│   ├── js/
+│   └── images/
+├── media/              # uploaded files (user-generated)
+│   ├── profiles/       # user profile pictures
+│   └── posts/          # post media (images, videos, docs)
+│       ├── images/
+│       ├── videos/
+│       └── media/
+├── Elmosyar-back/      # main Django project settings
+│   ├── __init__.py
+│   ├── asgi.py         # ASGI configuration for async
+│   ├── settings.py     # Django settings (DB, auth, apps, etc.)
+│   ├── urls.py         # main URL routing
+│   ├── wsgi.py         # WSGI configuration for production
+│   └── admin.py        # project-level admin config
+├── manage.py           # Django management script
+├── requirements.txt    # Python dependencies (pip install -r)
+├── .env.example        # environment variables template
+├── db.sqlite3          # SQLite database (development)
+├── README.md           # this file
+└── .gitignore          # git ignore rules
 ```
 
-## Email Configuration
+### Key File Descriptions
 
-**Development Mode:** Emails are printed to console
+**settings.py**
+```python
+# Critical configurations:
+- DEBUG: Enable/disable debug mode
+- SECRET_KEY: Django secret for cryptography
+- DATABASES: Database configuration (SQLite/PostgreSQL)
+- INSTALLED_APPS: Enabled Django and third-party apps
+- MIDDLEWARE: Request/response processing pipeline
+- TEMPLATES: Template engine configuration
+- REST_FRAMEWORK: DRF settings for API
+- CORS_ALLOWED_ORIGINS: Frontend domains allowed
+- MEDIA_ROOT/MEDIA_URL: File upload configuration
+- EMAIL_BACKEND: Email configuration
+- AUTH_USER_MODEL: Custom user model reference
+```
 
-**Production Mode:** Update `settings.py`:
+**urls.py (main)**
+```python
+# Main URL dispatcher:
+- Admin panel: /admin/
+- Core app endpoints: /api/* (via include)
+- Static files: /static/ (development)
+- Media files: /media/ (development)
+```
+
+**core/views.py**
+```python
+# API endpoints (15+ functions):
+- signup(): User registration
+- verify_email(): Email confirmation
+- login_user(): Authentication
+- logout_user(): Session termination
+- get_profile(): User profile retrieval
+- update_profile(): Profile information update
+- update_profile_picture(): Image upload
+- request_password_reset(): Password recovery request
+- reset_password(): Password change
+- posts_list_create(): Post feed and creation
+- post_like(): Like/unlike posts
+- post_comment(): Add comments
+- post_repost(): Share posts
+- notifications_list(): User notifications
+- notifications_mark_read(): Mark notifications
+```
+
+**core/models.py**
+```python
+# Database models (6 main models):
+- User: Extended Django User with IUST fields
+- Post: Content creation
+- PostMedia: Media files for posts
+- Like: Post interactions
+- Comment: Post discussions
+- Notification: User notifications
+```
+
+**requirements.txt**
+```
+Django==5.2.2
+djangorestframework==3.14.0
+django-cors-headers==4.3.1
+python-decouple==3.8
+Pillow==10.1.0
+(plus transitive dependencies)
+```
+
+## API (summary)
+- POST /api/signup/ — register
+- GET /api/verify-email/<token>/ — verify email
+- POST /api/login/ — login (username_or_email + password)
+- POST /api/logout/ — logout
+- GET /api/profile/ — get profile
+- POST /api/profile/update/ — update profile fields
+- POST /api/profile/update-picture/ — upload profile picture (multipart)
+- POST /api/password-reset/request/ — request reset
+- POST /api/password-reset/<token>/ — reset password
+
+Example signup request:
+```json
+{
+    "username":"john_doe",
+    "email":"john@iust.ac.ir",
+    "password":"SecurePass123",
+    "password_confirm":"SecurePass123"
+}
+```
+
+## User model (high level)
+- Required: username, email (@iust.ac.ir), password (min 8)
+- Optional: first_name, last_name, student_id, bio, profile_picture
+- System: is_email_verified, email_verification_token (24h), password_reset_token (1h), created_at, updated_at
+
+## Database Schema (Entity Relationship Diagram)
+
+```
+┌─────────────────────────────────────────────────┐
+│                    USER                         │
+├─────────────────────────────────────────────────┤
+│ id (PK)                                         │
+│ username (UNIQUE)                               │
+│ email (UNIQUE, @iust.ac.ir)                    │
+│ password (hashed)                               │
+│ first_name                                      │
+│ last_name                                       │
+│ student_id                                      │
+│ bio (TextField)                                 │
+│ profile_picture (ImageField)                   │
+│ is_email_verified (Boolean)                    │
+│ email_verification_token                       │
+│ email_verification_sent_at                     │
+│ password_reset_token                           │
+│ password_reset_sent_at                         │
+│ is_active (Boolean)                            │
+│ created_at (DateTime)                          │
+│ updated_at (DateTime)                          │
+└─────────────────────────────────────────────────┘
+           ▲              ▲            ▲
+           │              │            │
+           │ 1:N          │ 1:N       │ 1:N
+           │              │           │
+    ┌──────┴────┐  ┌──────┴──────┐ ┌─┴──────────┐
+    │            │  │             │ │            │
+    ▼            ▼  ▼             ▼ ▼            ▼
+┌────────┐ ┌─────────┐ ┌─────────┐ ┌────────┐ ┌──────────────┐
+│  POST  │ │ COMMENT │ │  LIKE   │ │NOTIFIC.│ │NOTIFICATION │
+├────────┤ ├─────────┤ ├─────────┤ ├────────┤ ├──────────────┤
+│ id(PK) │ │ id(PK)  │ │ id(PK)  │ │id(PK)  │ │ id (PK)      │
+│author_id│ │user_id  │ │user_id  │ │recip.. │ │ recipient_id │
+│content  │ │post_id  │ │post_id  │ │sender..│ │ sender_id    │
+│tags    │ │content  │ │created_at│ │type    │ │ notif_type   │
+│is_repost│ │post_id  │ │         │ │post_id │ │ post_id      │
+│original │ │parent_id│ │UNIQUE   │ │message │ │ comment_id   │
+│mentions │ │created_at│ │(user,  │ │is_read │ │ message      │
+│created_at│ │         │ │post)   │ │created │ │ is_read      │
+│updated_at│ │         │ │        │ │_at    │ │ created_at   │
+└────────┘ └─────────┘ └─────────┘ └────────┘ └──────────────┘
+    │
+    │ 1:N
+    │
+    ▼
+┌──────────────┐
+│  POSTMEDIA   │
+├──────────────┤
+│ id (PK)      │
+│ post_id (FK) │
+│ file         │
+│ media_type   │
+│ created_at   │
+└──────────────┘
+```
+
+### Relationships Summary
+
+| Model | Relationship | Target | Type |
+|-------|---|---|---|
+| POST | author | USER | ForeignKey |
+| POST | mentions | USER | ManyToMany |
+| POST | original_post | POST | ForeignKey (self) |
+| POSTMEDIA | post | POST | ForeignKey |
+| LIKE | user | USER | ForeignKey |
+| LIKE | post | POST | ForeignKey |
+| COMMENT | user | USER | ForeignKey |
+| COMMENT | post | POST | ForeignKey |
+| COMMENT | parent | COMMENT | ForeignKey (self) |
+| NOTIFICATION | recipient | USER | ForeignKey |
+| NOTIFICATION | sender | USER | ForeignKey |
+| NOTIFICATION | post | POST | ForeignKey |
+| NOTIFICATION | comment | COMMENT | ForeignKey |
+
+## Development notes
+- In development emails are printed to console.
+- Add frontend domain to CORS_ALLOWED_ORIGINS/CORS_ALLOWED_HOSTS.
+- MEDIA_ROOT used for uploaded files; DEBUG=True is fine for development.
+
+## Production checklist
+- Set DEBUG = False
+- Use a strong SECRET_KEY
+- Configure ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS
+- Configure SMTP for email (see settings.py)
+- Use persistent DB (Postgres), secure credentials
+- Use S3/CDN or web server (Nginx) for static/media
+- Enable HTTPS, SECURE_SSL_REDIRECT, proper logging & backups
+
+Example SMTP config for settings.py:
 ```python
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'your-smtp-server.com'
+EMAIL_HOST = 'smtp.example.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'your-email@example.com'
-EMAIL_HOST_PASSWORD = 'your-password'
+EMAIL_HOST_USER = 'user@example.com'
+EMAIL_HOST_PASSWORD = 'password'
 DEFAULT_FROM_EMAIL = 'noreply@example.com'
 ```
 
-## Troubleshooting
-
-### Database Errors
+## Common commands
 ```bash
-rm db.sqlite3
+python manage.py runserver
+python manage.py makemigrations
 python manage.py migrate
+python manage.py createsuperuser
+python manage.py collectstatic
+rm db.sqlite3 && python manage.py migrate
 ```
 
-### Module Not Found Errors
-Ensure you're in the correct directory and virtual environment is activated.
-
-### CORS Errors
-Add your frontend URL to `CORS_ALLOWED_ORIGINS` in `settings.py`
-
-### Port Already in Use
-```bash
-python manage.py runserver 8001
-```
-
-## Security
-
-- ⚠️ Change default admin credentials in production
-- Email verification required before login
-- Tokens expire automatically (email: 24h, password: 1h)
-- Passwords hashed using PBKDF2
-- CSRF protection enabled
-- CORS configured for development
+## Troubleshooting
+- Module not found: activate the correct venv and be in project root.
+- DB errors: remove db.sqlite3 and rerun migrations.
+- CORS errors: add frontend URL to CORS_ALLOWED_ORIGINS.
+- Port in use: runserver with different port (e.g., 8001).
 
 ## Dependencies
-
-See `requirements.txt`:
-- Django ~5.2.2
-- djangorestframework ~3.14.0
-- django-cors-headers ~4.3.1
-- python-decouple ~3.8
-- Pillow ~10.1.0
-
-## Features Implemented
-
-✅ User Registration with validation
-✅ Email verification (24-hour tokens)
-✅ User Login/Logout
-✅ Profile View & Edit
-✅ Password Reset (1-hour tokens)
-✅ CORS enabled for frontend
-✅ JSON API responses
-✅ Session-based authentication
-✅ Custom User model
-✅ Testing interface
+See requirements.txt (Django ~5.2.2, djangorestframework ~3.14, django-cors-headers, python-decouple, Pillow, etc.)
 
 ## Notes
+- Tokens: email verification 24h, password reset 1h.
+- All API responses use a consistent JSON format: { success, message, data }.
+- Frontend testing interface available at the project root (templates/index.html).
 
-- All text and code is in English only
-- No external CSS framework used
-- Simple HTML + vanilla JavaScript for testing
-- SQLite database for development
-- Full REST API ready for frontend integration
+For full details, refer to the project files and API routes in core/ and settings.py.
 
-## Entity Relationship Diagram (ERD)
+---
 
-Below is the ER diagram for the main models in this Django backend. This diagram shows the tables, fields, and relationships (FK/M2M) between entities.
+## About Elmosyar Project
 
-```mermaid
-erDiagram
-    USER {
-        int id PK
-        string username
-        string email
-        string password
-        string first_name
-        string last_name
-        string student_id
-        string bio
-        string profile_picture
-        bool is_email_verified
-        string email_verification_token
-        string password_reset_token
-        datetime created_at
-        datetime updated_at
-    }
-    POST {
-        int id PK
-        string content
-        datetime created_at
-        string tags
-        bool is_repost
-    }
-    POSTMEDIA {
-        int id PK
-        string file
-        string media_type
-    }
-    LIKE {
-        int id PK
-    }
-    COMMENT {
-        int id PK
-        string content
-        datetime created_at
-    }
-    NOTIFICATION {
-        int id PK
-        string notif_type
-        string message
-        bool is_read
-        datetime created_at
-    }
+**Elmosyar** is a comprehensive social platform and authentication system designed for the Iran University of Science and Technology (IUST) community. The name "Elmosyar" (الموسیقار) reflects the harmony and coordination required in a connected university network.
 
-    USER ||--o{ POST : author
-    USER ||--o{ COMMENT : author
-    USER ||--o{ LIKE : user
-    USER ||--o{ NOTIFICATION : recipient
-    USER ||--o{ NOTIFICATION : sender
-    POST ||--o{ POSTMEDIA : media
-    POST ||--o{ LIKE : likes
-    POST ||--o{ COMMENT : comments
-    POST ||--o{ NOTIFICATION : post
-    POST ||--o{ POST : original_post
-    COMMENT ||--o{ NOTIFICATION : comment
-    COMMENT ||--o{ COMMENT : parent
-    POST ||--o{ USER : mentions
-```
+### Project Purpose
 
-## Support
+Elmosyar-back provides the backend infrastructure for a LinkedIn-like social network specifically tailored for IUST students and faculty, enabling:
+- Secure user authentication and profile management
+- Academic and professional networking
+- Content sharing and community engagement
+- Real-time notifications and interactions
 
-For documentation:
-- Django: https://docs.djangoproject.com/
-- DRF: https://www.django-rest-framework.org/
-- IUST: Use @iust.ac.ir email domain
+### Target Users
+
+- **IUST Students**: Using @iust.ac.ir email addresses
+- **Faculty Members**: Academic staff at IUST
+- **Alumni**: Former students maintaining connections
+
+### Key Design Principles
+
+1. **Security First**: All passwords hashed, email verification required, token-based operations
+2. **Scalability**: RESTful API design, database-optimized queries, media storage separation
+3. **User Privacy**: Only authenticated users can access profiles and content
+4. **Community Focus**: Built-in social features (mentions, tags, notifications)
+5. **Academic Integration**: Student ID tracking, institution email verification
+
+### Core Capabilities
+
+#### Authentication & Authorization
+- Email-based domain verification (IUST-only)
+- Session-based authentication
+- Token expiration for security
+- Password hashing with PBKDF2
+
+#### User Profiles
+- Customizable profile information
+- Profile picture support with image processing
+- Academic identity (student ID)
+- Bio and professional information
+
+#### Social Features
+- Post creation with rich media support
+- Like and comment system
+- Repost functionality for content amplification
+- @mentions for direct communication
+- Hashtags for content organization
+- Notification system for user interactions
+
+#### Media Management
+- Image upload and storage
+- Video media support
+- Document sharing capabilities
+- Automatic file type detection
+- Storage organization by content type
+
+### Technical Architecture
+
+**Backend**: Django 5.2.2
+- Modular app structure (core app for authentication)
+- Django ORM for database operations
+- Django REST Framework for API endpoints
+
+**Database**: SQLite (development) / PostgreSQL (recommended production)
+- Relational schema with proper indexing
+- Foreign key relationships for data integrity
+- Many-to-many relationships for tags and mentions
+
+**Authentication**: Session-based
+- HTTP-only cookies for token storage
+- CSRF protection enabled
+- CORS support for frontend integration
+
+**File Storage**: Django's FileField
+- Local storage for development
+- S3/CDN recommended for production
+- Automatic path organization
+
+### Security Measures
+
+- Password minimum 8 characters with confirmation
+- Email verification before account activation
+- Token-based operations with expiration
+- SQL injection prevention via ORM
+- XSS protection through Django templates
+- CSRF tokens on all state-changing operations
+- Rate limiting recommended for production
+
+### API Design Patterns
+
+- RESTful endpoints following HTTP semantics
+- Consistent JSON response format
+- HTTP status codes for clarity
+- Error messages in responses
+- Pagination support for large datasets
+
+### Deployment Considerations
+
+**Development**:
+- SQLite database
+- DEBUG mode enabled
+- Console email printing
+- CORS permissive settings
+
+**Production**:
+- PostgreSQL database
+- DEBUG disabled
+- SMTP email configuration
+- Specific ALLOWED_HOSTS
+- HTTPS enforcement
+- CDN for media files
+- Automated backups
+
+### Future Enhancement Opportunities
+
+- Advanced search functionality
+- User recommendation system
+- Direct messaging between users
+- Event creation and management
+- Group creation for courses/clubs
+- File sharing with access control
+- Activity feed algorithms
+- Mobile application API expansion
+- Analytics dashboard
+- Two-factor authentication
+
+### Integration Points
+
+- Email verification via SMTP
+- OAuth integration ready
+- Frontend framework agnostic
+- Mobile app compatible
+- Third-party social media sharing
+
+### Support & Maintenance
+
+- Regular security updates
+- Database migration support
+- API versioning ready
+- Performance monitoring
+- Error logging and tracking
+- Community contribution ready
+
+### License & Attribution
+
+Elmosyar-back is developed for educational and community purposes at IUST. The platform respects user privacy and data security standards.
+
+---
+
+**Last Updated**: November 2025
+**Version**: 1.0.0
+**Maintained By**: IUST Development Team

@@ -536,3 +536,43 @@ def reset_password(request, token):
             'success': False,
             'message': str(e)
         }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_profile_picture(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'User not authenticated'
+        }, status=401)
+
+    try:
+        if 'profile_picture' not in request.FILES:
+            return JsonResponse({
+                'success': False,
+                'message': 'No image file provided'
+            }, status=400)
+
+        profile_picture = request.FILES['profile_picture']
+        user = request.user
+
+        # Delete old profile picture if exists
+        if user.profile_picture:
+            if user.profile_picture.name:
+                user.profile_picture.delete(save=False)
+
+        user.profile_picture = profile_picture
+        user.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Profile picture updated successfully',
+            'profile_picture': user.profile_picture.url if user.profile_picture else None
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)

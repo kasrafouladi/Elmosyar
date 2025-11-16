@@ -9,6 +9,7 @@ urlpatterns = [
     path('api/verify-email/<str:token>/', views.verify_email, name='verify_email'),
     path('api/profile/', views.get_profile, name='get_profile'),
     path('api/profile/update/', views.update_profile, name='update_profile'),
+    path('api/profile/update-picture/', views.update_profile_picture, name='update_profile_picture'),
     path('api/password-reset/request/', views.request_password_reset, name='request_password_reset'),
     path('api/password-reset/<str:token>/', views.reset_password, name='reset_password'),
     # Posts and interactions

@@ -4,98 +4,288 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Posts</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        #new-post, #posts-list {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin: 20px auto;
+            max-width: 900px;
+        }
+        
+        h1, h2, h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        input, textarea {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: Arial, sans-serif;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        .post {
+            border: 1px solid #ccc;
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        
+        .post-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        
+        .post-author {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .post-date {
+            color: gray;
+            font-size: 12px;
+        }
+        
+        .post-content {
+            margin: 10px 0;
+            line-height: 1.5;
+        }
+        
+        .post-media {
+            margin: 10px 0;
+        }
+        
+        .post-media img,
+        .post-media video,
+        .post-media audio {
+            max-width: 100%;
+            margin: 5px 0;
+        }
+        
+        .post-tags {
+            color: #2196F3;
+            font-size: 12px;
+            margin: 5px 0;
+        }
+        
+        .post-mentions {
+            color: #F57C00;
+            font-size: 12px;
+            margin: 5px 0;
+        }
+        
+        .post-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .post-actions button {
+            padding: 8px 15px;
+            font-size: 12px;
+            background-color: #2196F3;
+        }
+        
+        .post-actions button:hover {
+            background-color: #0b7dda;
+        }
+        
+        .comment-section {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+        }
+        
+        .comment-box {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .comment-box textarea {
+            flex: 1;
+            min-height: 60px;
+        }
+        
+        .comment-box button {
+            align-self: flex-end;
+        }
+        
+        .message {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        
+        .success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+    </style>
 </head>
 <body>
-    <h1>LinkedIn-like Posts</h1>
+    <h1 style="text-align: center; margin-top: 20px;">LinkedIn-like Posts</h1>
+    <a href="/" style="display: block; margin: 20px auto; max-width: 900px; color: #2196F3;">← Back to Home</a>
+    
+    <!-- Create Post Section -->
     <div id="new-post">
         <h2>Create New Post</h2>
         <form id="post-form" enctype="multipart/form-data">
-            <textarea id="post-content" placeholder="What's on your mind?" required></textarea><br>
-            <input type="file" id="post-media" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.zip,.rar"><br>
-            <input type="text" id="post-tags" placeholder="Tags (comma separated)"><br>
-            <input type="text" id="post-mentions" placeholder="Mentions (comma separated usernames)"><br>
+            <textarea id="post-content" placeholder="What's on your mind?" required></textarea>
+            <input type="file" id="post-media" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.zip,.rar">
+            <input type="text" id="post-tags" placeholder="Tags (comma separated)">
+            <input type="text" id="post-mentions" placeholder="Mentions (comma separated usernames)">
             <button type="submit">Post</button>
         </form>
         <div id="post-message"></div>
     </div>
-    <hr>
+
+    <hr style="margin: 20px auto; max-width: 900px;">
+
+    <!-- Posts List Section -->
     <div id="posts-list">
         <h2>All Posts</h2>
         <div id="posts-container"></div>
     </div>
+
     <script>
+        const API_BASE = window.location.origin;
+
         // Helper to render media
         function renderMedia(media) {
             if (!media || !media.url) return '';
-            if (media.type.startsWith('image/')) {
+            if (media.type.startsWith('image/') || media.type === 'image') {
                 return `<img src="${media.url}" style="max-width:300px;">`;
-            } else if (media.type.startsWith('video/')) {
+            } else if (media.type.startsWith('video/') || media.type === 'video') {
                 return `<video src="${media.url}" controls style="max-width:300px;"></video>`;
-            } else if (media.type.startsWith('audio/')) {
+            } else if (media.type.startsWith('audio/') || media.type === 'audio') {
                 return `<audio src="${media.url}" controls></audio>`;
             } else {
-                return `<a href="${media.url}" target="_blank">Download file</a>`;
+                return `<a href="${media.url}" target="_blank">📎 Download file</a>`;
             }
         }
 
         // Fetch and render posts
         async function fetchPosts() {
-            const res = await fetch('/api/posts/');
+            const res = await fetch(`${API_BASE}/api/posts/`);
             const data = await res.json();
             const container = document.getElementById('posts-container');
             container.innerHTML = '';
+            
             if (data.success && data.posts.length) {
                 data.posts.forEach(post => {
                     let mediaHtml = '';
                     if (post.media && post.media.length) {
-                        mediaHtml = post.media.map(renderMedia).join('<br>');
+                        mediaHtml = '<div class="post-media">' + post.media.map(renderMedia).join('<br>') + '</div>';
                     }
+                    
+                    const tagsHtml = post.tags.length ? `<div class="post-tags">📌 Tags: ${post.tags.join(', ')}</div>` : '';
+                    const mentionsHtml = post.mentions.length ? `<div class="post-mentions">@Mentions: ${post.mentions.join(', ')}</div>` : '';
+                    
                     container.innerHTML += `
-                        <div style="border:1px solid #ccc; margin:10px; padding:10px;">
-                            <strong>${post.author}</strong> <span style="color:gray;">${post.created_at}</span><br>
-                            ${post.content}<br>
-                            ${mediaHtml}<br>
-                            <span>Tags: ${post.tags}</span><br>
-                            <span>Mentions: ${post.mentions.join(', ')}</span><br>
-                            <button onclick="likePost(${post.id})">Like (${post.likes_count})</button>
-                            <button onclick="showCommentBox(${post.id})">Comment (${post.comments_count})</button>
-                            <button onclick="repost(${post.id})">Repost (${post.reposts_count})</button>
-                            <div id="comments-${post.id}" style="display:none;"></div>
+                        <div class="post">
+                            <div class="post-header">
+                                <span class="post-author">${post.author}</span>
+                                <span class="post-date">${new Date(post.created_at).toLocaleString()}</span>
+                            </div>
+                            <div class="post-content">${post.content}</div>
+                            ${mediaHtml}
+                            ${tagsHtml}
+                            ${mentionsHtml}
+                            <div class="post-actions">
+                                <button onclick="likePost(${post.id})">👍 Like (${post.likes_count})</button>
+                                <button onclick="showCommentBox(${post.id})">💬 Comment (${post.comments_count})</button>
+                                <button onclick="repost(${post.id})">🔄 Repost (${post.reposts_count})</button>
+                            </div>
+                            <div id="comments-${post.id}" class="comment-section" style="display:none;"></div>
                         </div>
                     `;
                 });
             } else {
-                container.innerHTML = '<p>No posts yet.</p>';
+                container.innerHTML = '<p style="text-align: center; color: #999;">No posts yet.</p>';
             }
         }
 
         // Like post
         async function likePost(postId) {
-            await fetch(`/api/posts/${postId}/like/`, {method:'POST'});
+            await fetch(`${API_BASE}/api/posts/${postId}/like/`, { method: 'POST' });
             fetchPosts();
         }
 
         // Repost
         async function repost(postId) {
-            await fetch(`/api/posts/${postId}/repost/`, {method:'POST'});
+            await fetch(`${API_BASE}/api/posts/${postId}/repost/`, { method: 'POST' });
             fetchPosts();
         }
 
         // Show comment box
         function showCommentBox(postId) {
             const box = document.getElementById(`comments-${postId}`);
-            box.style.display = box.style.display === 'none' ? 'block' : 'none';
-            box.innerHTML = `<textarea id="comment-content-${postId}" placeholder="Write a comment..."></textarea><br>
-                <button onclick="submitComment(${postId})">Submit</button>`;
+            if (box.style.display === 'none') {
+                box.style.display = 'block';
+                box.innerHTML = `
+                    <div class="comment-box">
+                        <textarea id="comment-content-${postId}" placeholder="Write a comment..."></textarea>
+                        <button onclick="submitComment(${postId})">Send</button>
+                    </div>
+                `;
+            } else {
+                box.style.display = 'none';
+            }
         }
 
         // Submit comment
         async function submitComment(postId) {
             const content = document.getElementById(`comment-content-${postId}`).value;
-            await fetch(`/api/posts/${postId}/comment/`, {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({content})
+            if (!content.trim()) {
+                alert('Comment cannot be empty');
+                return;
+            }
+            await fetch(`${API_BASE}/api/posts/${postId}/comment/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content })
             });
             fetchPosts();
         }
@@ -107,27 +297,31 @@
             const tags = document.getElementById('post-tags').value;
             const mentions = document.getElementById('post-mentions').value;
             const mediaInput = document.getElementById('post-media');
+            
             const formData = new FormData();
             formData.append('content', content);
             formData.append('tags', tags);
             formData.append('mentions', mentions);
+            
             for (let file of mediaInput.files) {
                 formData.append('media', file);
             }
-            const res = await fetch('/api/posts/', {
-                method:'POST',
-                body:formData
+            
+            const res = await fetch(`${API_BASE}/api/posts/`, {
+                method: 'POST',
+                body: formData
             });
             const data = await res.json();
             const msg = document.getElementById('post-message');
+            
             if (data.success) {
-                msg.style.color = 'green';
-                msg.textContent = 'Post created!';
+                msg.className = 'message success';
+                msg.textContent = '✓ Post created!';
                 document.getElementById('post-form').reset();
                 fetchPosts();
             } else {
-                msg.style.color = 'red';
-                msg.textContent = data.message || 'Error creating post.';
+                msg.className = 'message error';
+                msg.textContent = '✗ ' + (data.message || 'Error creating post.');
             }
         });
 
