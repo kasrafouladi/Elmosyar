@@ -51,7 +51,7 @@ A Django-based authentication backend API with user registration, email verifica
 	- All communication through HTTP REST endpoints
 	- JSON request/response format
 	- CORS enabled for frontend communication
-
+```
 ## Project Structure
 
 ```text
@@ -359,27 +359,6 @@ See `requirements.txt`:
 - django-cors-headers ~4.3.1
 - python-decouple ~3.8
 - Pillow ~10.1.0
-
-## File Structure
-
-```
-Elmosyar-back/
-├── core/
-│   ├── models.py              # User model definition
-│   ├── views.py               # API endpoints (350+ lines)
-│   ├── urls.py                # URL routing
-│   └── migrations/
-├── settings.py                # Django configuration
-├── urls.py                    # Main URL config
-├── wsgi.py                    # WSGI entry point
-└── asgi.py                    # ASGI entry point
-
-templates/
-└── index.html                 # Testing interface (HTML + JS, no CSS)
-
-manage.py                       # Django management
-requirements.txt                # Python packages
-```
 
 ## Features Implemented
 
