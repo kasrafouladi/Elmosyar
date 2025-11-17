@@ -99,6 +99,8 @@
         .secondary-button:hover {
             background-color: #0b7dda;
         }
+        
+        .message {
             margin-top: 10px;
             padding: 10px;
             border-radius: 4px;
@@ -122,8 +124,10 @@
             <button onclick="showView('signup')" id="signup-btn">Sign Up</button>
             <button onclick="showView('login')" id="login-btn">Login</button>
             <button onclick="showView('profile')" id="profile-btn" style="display:none;">Profile</button>
+            <a href="/posts/" id="posts-link" style="display:none;">Posts</a>
+            <a href="/posts/create/" id="create-post-link" style="display:none;">+ Create Post</a>
+            <a href="/explore/" id="explore-link" style="display:none;">Explore</a>
             <button onclick="logoutUser()" id="logout-btn" style="display:none;">Logout</button>
-            <a href="/posts/" id="posts-link" style="display:none;">Posts Page</a>
         </nav>
 
         <!-- Home View -->
@@ -137,7 +141,7 @@
             <h2>Sign Up</h2>
             <form id="signup-form">
                 <input type="text" id="signup-username" placeholder="Username" required>
-                <input type="email" id="signup-email" placeholder="Email (subdomain@iust.ac.ir)" required>
+                <input type="email" id="signup-email" placeholder="Email" required>
                 <input type="password" id="signup-password" placeholder="Password (min 8 chars)" required>
                 <input type="password" id="signup-confirm-password" placeholder="Confirm Password" required>
                 <button type="submit">Sign Up</button>
@@ -243,6 +247,8 @@
             document.getElementById('profile-btn').style.display = 'block';
             document.getElementById('logout-btn').style.display = 'block';
             document.getElementById('posts-link').style.display = 'block';
+            document.getElementById('create-post-link').style.display = 'block';
+            document.getElementById('explore-link').style.display = 'block';
         }
 
         function updateNavbarForLoggedOut() {
@@ -251,6 +257,8 @@
             document.getElementById('profile-btn').style.display = 'none';
             document.getElementById('logout-btn').style.display = 'none';
             document.getElementById('posts-link').style.display = 'none';
+            document.getElementById('create-post-link').style.display = 'none';
+            document.getElementById('explore-link').style.display = 'none';
         }
 
         function showView(view) {
