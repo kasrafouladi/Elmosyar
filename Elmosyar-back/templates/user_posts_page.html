@@ -2,28 +2,26 @@
 {% load static %}
 
 {% block content %}
-<div class="explore-room-page" style="max-width: 900px; margin: 0 auto; padding: 20px;">
-    <h2>Explore Rooms</h2>
-    
-    <!-- Room Search Form -->
-    <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;">
-        <form id="room-search-form">
-            <input type="text" id="room-name" placeholder="Enter room name" required 
-                   style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 70%; margin-right: 10px;">
-            <button type="submit" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                Search Room
-            </button>
-        </form>
+<div class="user-posts-page" style="max-width: 900px; margin: 0 auto; padding: 20px;">
+    <!-- Back Button -->
+    <a href="/profiles/{{ profile_user.username }}/" 
+       style="display: inline-block; margin-bottom: 20px; color: #2196F3; text-decoration: none;">
+        ← Back to Profile
+    </a>
+
+    <!-- Page Header -->
+    <div class="page-header" style="text-align: center; margin-bottom: 30px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h1>{{ profile_user.username }}'s Posts</h1>
+        <p style="color: #666;">All posts by this user</p>
     </div>
 
-    <!-- Room Posts -->
-    <div id="room-posts-list">
-        <div id="posts-container"></div>
-    </div>
+    <!-- Posts Container -->
+    <div id="posts-container"></div>
 </div>
 
 <script>
     const API_BASE = window.location.origin;
+    const USERNAME = "{{ profile_user.username }}";
 
     function renderPost(post) {
         let mediaHtml = '';
@@ -40,14 +38,19 @@
         const tagsHtml = post.tags.length ? 
             `<div style="color: #2196F3; font-size: 12px; margin: 5px 0;">📌 ${post.tags.join(', ')}</div>` : '';
 
+        const roomHtml = post.category ? 
+            `<div style="margin: 5px 0;">
+                <a href="/explore/?room=${encodeURIComponent(post.category)}" 
+                   style="background: #4CAF50; color: white; padding: 4px 8px; border-radius: 12px; text-decoration: none; font-size: 12px;">
+                   🏠 ${post.category}
+                </a>
+            </div>` : '';
+
         return `
             <div class="post" style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin: 15px 0; background: white;">
                 <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 10px;">
                     <div style="flex: 1;">
-                        <a href="/profiles/${post.author}/" style="font-weight: bold; text-decoration: none; color: #333;">
-                            ${post.author}
-                        </a>
-                        <span style="color: #666; font-size: 12px; margin-left: 10px;">
+                        <span style="color: #666; font-size: 12px;">
                             ${new Date(post.created_at).toLocaleString()}
                         </span>
                     </div>
@@ -59,6 +62,7 @@
                 <div style="margin: 10px 0; line-height: 1.5;">${post.content}</div>
                 ${mediaHtml}
                 ${tagsHtml}
+                ${roomHtml}
                 <div style="display: flex; gap: 15px; margin-top: 10px; font-size: 12px; color: #666;">
                     <span>👍 ${post.likes_count} Likes</span>
                     <span>💬 ${post.comments_count} Comments</span>
@@ -68,43 +72,25 @@
         `;
     }
 
-    async function loadRoomPosts(roomName) {
+    async function loadUserPosts() {
         try {
-            const response = await fetch(`${API_BASE}/api/posts/category/${encodeURIComponent(roomName)}/`);
+            const response = await fetch(`${API_BASE}/api/users/${USERNAME}/posts/`);
             const data = await response.json();
             
             const container = document.getElementById('posts-container');
             
             if (data.success && data.posts.length > 0) {
-                container.innerHTML = `<h3>Posts in room: "${roomName}"</h3>` + 
-                    data.posts.map(renderPost).join('');
+                container.innerHTML = data.posts.map(renderPost).join('');
             } else {
-                container.innerHTML = `<p style="text-align: center; color: #999; padding: 40px;">
-                    No posts found in room "${roomName}"
-                </p>`;
+                container.innerHTML = '<p style="text-align: center; color: #999; padding: 40px;">No posts yet.</p>';
             }
         } catch (error) {
-            console.error('Error loading room posts:', error);
+            console.error('Error loading posts:', error);
             document.getElementById('posts-container').innerHTML = 
-                '<p style="text-align: center; color: red;">Error loading room posts</p>';
+                '<p style="text-align: center; color: red;">Error loading posts</p>';
         }
     }
 
-    // Handle room search form
-    document.getElementById('room-search-form').addEventListener('submit', (e) => {
-        e.preventDefault();
-        const roomName = document.getElementById('room-name').value.trim();
-        if (roomName) {
-            loadRoomPosts(roomName);
-        }
-    });
-
-    // Check if room parameter is in URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const roomParam = urlParams.get('room');
-    if (roomParam) {
-        document.getElementById('room-name').value = roomParam;
-        loadRoomPosts(roomParam);
-    }
+    document.addEventListener('DOMContentLoaded', loadUserPosts);
 </script>
 {% endblock %}

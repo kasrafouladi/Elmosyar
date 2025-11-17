@@ -1,20 +1,3 @@
-from django.views.decorators.http import require_http_methods
-@require_http_methods(["GET"])
-def create_post_page(request):
-    return render(request, 'posts/create_post.html')
-
-@require_http_methods(["GET"])
-def profile_page(request, username):
-    user = get_object_or_404(User, username=username)
-    return render(request, 'profile.html', {'profile_user': user})
-
-@require_http_methods(["GET"])
-def explore_room_page(request):
-    return render(request, 'explore_room.html')
-
-@require_http_methods(["GET"])
-def post_detail_page(request, post_id):
-    return render(request, 'posts/post_detail.html', {'post_id': post_id})
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
@@ -30,6 +13,49 @@ from .models import User
 from .models import Post, PostMedia, Like, Comment, Notification, Reaction
 import mimetypes
 
+@require_http_methods(["GET"])
+def create_post_page(request):
+    return render(request, 'posts/create_post.html')
+
+@require_http_methods(["GET"])
+def user_posts(request, username):
+    """API endpoint to get posts by specific user"""
+    user = get_object_or_404(User, username=username)
+    posts = Post.objects.filter(author=user).select_related('author').prefetch_related('media', 'mentions').order_by('-created_at')[:100]
+    
+    return JsonResponse({
+        'success': True, 
+        'posts': [serialize_post(p) for p in posts],
+        'user': {
+            'username': user.username,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'profile_picture': user.profile_picture.url if user.profile_picture else None
+        }
+    })
+
+@require_http_methods(["GET"])
+def user_posts_page(request, username):
+    """Page to display all posts by a specific user"""
+    user = get_object_or_404(User, username=username)
+    return render(request, 'user_posts.html', {'profile_user': user})
+
+@require_http_methods(["GET"])
+def profile_page(request, username):
+    user = get_object_or_404(User, username=username)
+    context = {
+        'profile_user': user,
+        'profile_picture_url': user.profile_picture.url if user.profile_picture else None
+    }
+    return render(request, 'profile.html', context)
+
+@require_http_methods(["GET"])
+def explore_room_page(request):
+    return render(request, 'explore_room.html')
+
+@require_http_methods(["GET"])
+def post_detail_page(request, post_id):
+    return render(request, 'posts/post_detail.html', {'post_id': post_id})
 
 def serialize_post(post):
     media_list = []

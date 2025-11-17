@@ -1,7 +1,121 @@
 {% extends 'base.html' %}
+{% load static %}
+
 {% block content %}
-<div class="profile-page">
-    <h2>{{ profile_user.username }}'s Posts</h2>
-    <div id="user-posts-list"></div>
+<div class="profile-page" style="max-width: 900px; margin: 0 auto; padding: 20px;">
+    <!-- Profile Header -->
+    <div class="profile-header" style="text-align: center; margin-bottom: 30px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="margin-bottom: 15px;">
+            {% if profile_user.profile_picture %}
+                <img src="{{ profile_user.profile_picture.url }}" 
+                     style="width: 150px; height: 150px; border-radius: 50%; border: 3px solid #ddd; object-fit: cover;">
+            {% else %}
+                <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 150 150'%3E%3Crect fill='%23ddd' width='150' height='150'/%3E%3Ctext x='50%25' y='50%25' font-size='40' fill='%23999' text-anchor='middle' dy='.3em'%3E👤%3C/text%3E%3C/svg%3E" 
+                     style="width: 150px; height: 150px; border-radius: 50%; border: 3px solid #ddd;">
+            {% endif %}
+        </div>
+        <h2>{{ profile_user.username }}</h2>
+        {% if profile_user.first_name or profile_user.last_name %}
+            <p style="color: #666; font-size: 18px; margin: 5px 0;">
+                {{ profile_user.first_name }} {{ profile_user.last_name }}
+            </p>
+        {% endif %}
+        {% if profile_user.bio %}
+            <p style="color: #777; margin: 10px 0; max-width: 500px; margin-left: auto; margin-right: auto;">
+                {{ profile_user.bio }}
+            </p>
+        {% endif %}
+        <div style="margin-top: 15px;">
+            <a href="/profiles/{{ profile_user.username }}/posts/" 
+               style="display: inline-block; padding: 10px 20px; background: #2196F3; color: white; text-decoration: none; border-radius: 4px;">
+                📝 View Posts
+            </a>
+        </div>
+    </div>
+
+    <!-- User Posts -->
+    <div id="user-posts-list">
+        <h3>Recent Posts</h3>
+        <div id="posts-container" style="margin-top: 20px;"></div>
+    </div>
 </div>
+
+<script>
+    const API_BASE = window.location.origin;
+    const USERNAME = "{{ profile_user.username }}";
+
+    // Function to render a single post
+    function renderPost(post) {
+        let mediaHtml = '';
+        if (post.media && post.media.length) {
+            post.media.forEach(media => {
+                if (media.type === 'image') {
+                    mediaHtml += `<img src="${media.url}" style="max-width: 100%; border-radius: 8px; margin: 10px 0;">`;
+                } else if (media.type === 'video') {
+                    mediaHtml += `<video src="${media.url}" controls style="max-width: 100%; border-radius: 8px; margin: 10px 0;"></video>`;
+                }
+            });
+        }
+
+        const tagsHtml = post.tags.length ? 
+            `<div style="color: #2196F3; font-size: 12px; margin: 5px 0;">📌 ${post.tags.join(', ')}</div>` : '';
+
+        const roomHtml = post.category ? 
+            `<div style="margin: 5px 0;">
+                <a href="/explore/?room=${encodeURIComponent(post.category)}" 
+                   style="background: #4CAF50; color: white; padding: 4px 8px; border-radius: 12px; text-decoration: none; font-size: 12px;">
+                   🏠 ${post.category}
+                </a>
+            </div>` : '';
+
+        return `
+            <div class="post" style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin: 15px 0; background: white;">
+                <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 10px;">
+                    <div style="flex: 1;">
+                        <strong>${post.author}</strong>
+                        <span style="color: #666; font-size: 12px; margin-left: 10px;">
+                            ${new Date(post.created_at).toLocaleString()}
+                        </span>
+                    </div>
+                    <a href="/posts/${post.id}/" 
+                       style="background: #2196F3; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; font-size: 12px;">
+                       🔍 View Post
+                    </a>
+                </div>
+                <div style="margin: 10px 0; line-height: 1.5;">${post.content}</div>
+                ${mediaHtml}
+                ${tagsHtml}
+                ${roomHtml}
+                <div style="display: flex; gap: 15px; margin-top: 10px; font-size: 12px; color: #666;">
+                    <span>👍 ${post.likes_count} Likes</span>
+                    <span>💬 ${post.comments_count} Comments</span>
+                    <span>🔄 ${post.reposts_count} Reposts</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // Fetch and display user posts
+    async function loadUserPosts() {
+        try {
+            const response = await fetch(`${API_BASE}/api/users/${USERNAME}/posts/`);
+            const data = await response.json();
+            
+            const container = document.getElementById('posts-container');
+            
+            if (data.success && data.posts.length > 0) {
+                container.innerHTML = data.posts.map(renderPost).join('');
+            } else {
+                container.innerHTML = '<p style="text-align: center; color: #999; padding: 40px;">No posts yet.</p>';
+            }
+        } catch (error) {
+            console.error('Error loading posts:', error);
+            document.getElementById('posts-container').innerHTML = 
+                '<p style="text-align: center; color: red;">Error loading posts</p>';
+        }
+    }
+
+    // Load posts when page loads
+    document.addEventListener('DOMContentLoaded', loadUserPosts);
+</script>
 {% endblock %}
