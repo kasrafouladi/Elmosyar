@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Platform</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <a href="#home" onclick="showPage('home')">📱 SocialApp</a>
+            </div>
+            <div class="nav-links">
+                <a href="#home" onclick="showPage('home')" class="nav-link">🏠 خانه</a>
+                <a href="#explore" onclick="showPage('explore')" class="nav-link">🔍 اکسپلور</a>
+                <a href="#search" onclick="showPage('search')" class="nav-link">👥 جستجو</a>
+                <a href="#create-post" onclick="showPage('create-post')" class="nav-link">📝 پست جدید</a>
+                <span id="auth-buttons">
+                    <a href="#login" onclick="showPage('login')" class="nav-link">🔐 ورود</a>
+                    <a href="#signup" onclick="showPage('signup')" class="nav-link">📝 ثبت‌نام</a>
+                </span>
+                <span id="user-menu" style="display: none;">
+                    <a href="#profile" onclick="showPage('profile')" class="nav-link">👤 پروفایل</a>
+                    <button onclick="logout()" class="nav-link logout-btn">🚪 خروج</button>
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main id="main-content">
+        <!-- Pages will be loaded here dynamically -->
+    </main>
+
+    <!-- Loading Spinner -->
+    <div id="loading" class="loading" style="display: none;">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/utils.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/posts.js"></script>
+    <script src="js/profile.js"></script>
+    <script src="js/app.js"></script>
+
+    <script>
+        // هندل کردن لینک بازیابی رمز عبور از ایمیل
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const resetToken = urlParams.get('token');
+            
+            if (resetToken) {
+                // هدایت به صفحه تنظیم رمز عبور جدید
+                showPage('reset-password');
+                // ذخیره توکن در فرم
+                setTimeout(() => {
+                    const form = document.getElementById('reset-password-form');
+                    if (form) {
+                        form.dataset.token = resetToken;
+                    }
+                }, 100);
+            }
+        });
+    </script>
+</body>
+</html>
