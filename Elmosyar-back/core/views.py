@@ -9,7 +9,7 @@ from django.conf import settings
 import json
 from datetime import timedelta
 
-from .models import User, Post, PostMedia, Like, Comment, Notification, Reaction
+from .models import User, Post, PostMedia, Comment, Notification, Reaction
 import mimetypes
 
 def serialize_post(post, include_user_info=False):
