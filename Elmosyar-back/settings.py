@@ -1,5 +1,6 @@
 """
 Django settings for Elmosyar-back project.
+Optimized for Pure REST API
 """
 
 import os
@@ -13,38 +14,44 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config("SECRET_KEY", default='django-insecure-change-in-production')
 DEBUG = config("DEBUG", default=True, cast=bool)
 
-ALLOWED_HOSTS = ['0.0.0.0', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['0.0.0.0', 'localhost', '127.0.0.1', '*']
 
+# CORS Configuration - Important for separate frontend
 CORS_ALLOWED_ORIGINS = [
-    f"http://{ALLOWED_HOSTS[0]}:3000",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:5173",  # Vite default
+    "http://127.0.0.1:5173",
+    "http://localhost:8080",  # Vue CLI default
+    "http://127.0.0.1:8080",
 ]
 
+# Allow credentials (cookies, sessions)
 CORS_ALLOW_CREDENTIALS = True
+
+# Allow all origins in development (optional - less secure)
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+
+# CORS headers to expose
+CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
+
+# Allowed HTTP methods
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
 
 # Codespaces configuration
 if 'CODESPACE_NAME' in os.environ:
     codespace_name = config("CODESPACE_NAME", default='')
     codespace_domain = config("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN", default='')
     CSRF_TRUSTED_ORIGINS = [f'https://{codespace_name}-8000.{codespace_domain}']
-
-# Template settings
-TEMPLATES = [
-    {
-        "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
-        "APP_DIRS": True,
-        "OPTIONS": {
-            "context_processors": [
-                "django.template.context_processors.debug",
-                "django.template.context_processors.request",
-                "django.contrib.auth.context_processors.auth",
-                "django.contrib.messages.context_processors.messages",
-            ],
-        },
-    },
-]
+    CORS_ALLOWED_ORIGINS.append(f'https://{codespace_name}-3000.{codespace_domain}')
 
 # Apps
 INSTALLED_APPS = [
@@ -65,7 +72,7 @@ INSTALLED_APPS = [
 
 # Middleware
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",
+    "corsheaders.middleware.CorsMiddleware",  # Must be first
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -78,6 +85,23 @@ MIDDLEWARE = [
 # URLs
 ROOT_URLCONF = "Elmosyar-back.urls"
 WSGI_APPLICATION = "Elmosyar-back.wsgi.application"
+
+# Templates (only for admin panel)
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
 
 # Database
 DATABASES = {
@@ -101,7 +125,7 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-# Static & Media files (only for admin, not for frontend)
+# Static & Media files
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
@@ -114,14 +138,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Custom user model
 AUTH_USER_MODEL = "core.User"
 
-# CORS settings
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-
-CORS_ALLOW_CREDENTIALS = True
-
 # REST Framework
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -133,7 +149,26 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
     ],
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+        "rest_framework.parsers.MultiPartParser",
+        "rest_framework.parsers.FormParser",
+    ],
+    # Pagination
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 100,
 }
+
+# Session settings
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'  # or 'None' for cross-origin
+SESSION_COOKIE_SECURE = not DEBUG  # True in production with HTTPS
+
+# CSRF settings for API
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read CSRF token
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS if DEBUG else []
 
 # Email Configuration
 EMAIL_BACKEND = config(
@@ -149,3 +184,26 @@ if EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend':
     EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@elmosyar.ir')
+
+# Logging for development
+if DEBUG:
+    LOGGING = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'handlers': {
+            'console': {
+                'class': 'logging.StreamHandler',
+            },
+        },
+        'root': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+        'loggers': {
+            'django': {
+                'handlers': ['console'],
+                'level': 'INFO',
+                'propagate': False,
+            },
+        },
+    }

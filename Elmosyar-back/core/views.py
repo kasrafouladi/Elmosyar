@@ -1,7 +1,7 @@
-from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
+from django.shortcuts import get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.core.mail import send_mail
 from django.utils import timezone
@@ -12,7 +12,35 @@ from datetime import timedelta
 from .models import User, Post, PostMedia, Comment, Notification, Reaction
 import mimetypes
 
-def serialize_post(post, include_user_info=False):
+
+# ════════════════════════════════════════════════════════════
+# 🔧 Helper Functions
+# ════════════════════════════════════════════════════════════
+
+def serialize_user(user, include_sensitive=False):
+    """Serialize user data"""
+    data = {
+        'id': user.id,
+        'username': user.username,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'profile_picture': user.profile_picture.url if user.profile_picture else None,
+        'bio': user.bio,
+        'student_id': user.student_id,
+    }
+    
+    if include_sensitive:
+        data.update({
+            'email': user.email,
+            'is_email_verified': user.is_email_verified,
+            'created_at': user.created_at.isoformat(),
+        })
+    
+    return data
+
+
+def serialize_post(post, include_user_info=True, current_user=None):
+    """Serialize post data"""
     media_list = []
     for m in post.media.all():
         media_list.append({
@@ -26,6 +54,7 @@ def serialize_post(post, include_user_info=False):
         'author': post.author.username,
         'content': post.content,
         'created_at': post.created_at.isoformat(),
+        'updated_at': post.updated_at.isoformat(),
         'tags': [t.strip() for t in post.tags.split(',')] if post.tags else [],
         'mentions': [u.username for u in post.mentions.all()],
         'media': media_list,
@@ -41,70 +70,95 @@ def serialize_post(post, include_user_info=False):
     }
     
     if include_user_info:
-        data['author_info'] = {
-            'username': post.author.username,
-            'first_name': post.author.first_name,
-            'last_name': post.author.last_name,
-            'profile_picture': post.author.profile_picture.url if post.author.profile_picture else None,
-        }
+        data['author_info'] = serialize_user(post.author, include_sensitive=False)
+    
+    # Add user's reaction status if authenticated
+    if current_user and current_user.is_authenticated:
+        user_reaction = post.reactions.filter(user=current_user).first()
+        data['user_reaction'] = user_reaction.reaction if user_reaction else None
     
     return data
 
 
 def serialize_comment(comment):
+    """Serialize comment data"""
     return {
         'id': comment.id,
         'user': comment.user.username,
+        'user_info': serialize_user(comment.user, include_sensitive=False),
         'content': comment.content,
         'created_at': comment.created_at.isoformat(),
         'parent_id': comment.parent.id if comment.parent else None,
     }
 
 
+def serialize_notification(notification):
+    """Serialize notification data"""
+    return {
+        'id': notification.id,
+        'sender': notification.sender.username,
+        'sender_info': serialize_user(notification.sender, include_sensitive=False),
+        'type': notification.notif_type,
+        'post_id': notification.post.id if notification.post else None,
+        'comment_id': notification.comment.id if notification.comment else None,
+        'message': notification.message,
+        'is_read': notification.is_read,
+        'created_at': notification.created_at.isoformat(),
+    }
+
+
+# ════════════════════════════════════════════════════════════
+# 🏠 Basic Endpoint
+# ════════════════════════════════════════════════════════════
+
+@require_http_methods(["GET"])
 def index(request):
-    return render(request, "index.html")
+    """API root endpoint"""
+    return JsonResponse({
+        'success': True,
+        'message': 'API is running',
+        'endpoints': {
+            'auth': {
+                'signup': '/api/signup/',
+                'login': '/api/login/',
+                'logout': '/api/logout/',
+                'verify_email': '/api/verify-email/{token}/',
+                'password_reset_request': '/api/password-reset/request/',
+                'password_reset': '/api/password-reset/{token}/',
+            },
+            'profile': {
+                'get_profile': '/api/profile/',
+                'update_profile': '/api/profile/update/',
+                'update_profile_picture': '/api/profile/update-picture/',
+                'get_user_profile': '/api/users/{username}/profile/',
+            },
+            'posts': {
+                'list_create': '/api/posts/',
+                'detail': '/api/posts/{post_id}/',
+                'like': '/api/posts/{post_id}/like/',
+                'dislike': '/api/posts/{post_id}/dislike/',
+                'comment': '/api/posts/{post_id}/comment/',
+                'repost': '/api/posts/{post_id}/repost/',
+                'thread': '/api/posts/{post_id}/thread/',
+                'by_category': '/api/posts/category/{category_id}/',
+                'user_posts': '/api/users/{username}/posts/',
+            },
+            'notifications': {
+                'list': '/api/notifications/',
+                'mark_read': '/api/notifications/mark-read/',
+            }
+        }
+    })
 
 
-@require_http_methods(["GET"])
-def reset_password_page(request):
-    return render(request, 'reset_password.html')
-
-
-@require_http_methods(["GET"])
-def create_post_page(request):
-    return render(request, 'posts/create_post.html')
-
-
-@require_http_methods(["GET"])
-def posts_list_page(request):
-    return render(request, 'posts/posts_list.html')
-
-
-@require_http_methods(["GET"])
-def profile_page(request, username):
-    user = get_object_or_404(User, username=username)
-    return render(request, 'profile.html', {'profile_user': user})
-
-
-@require_http_methods(["GET"])
-def user_posts_page(request, username):
-    user = get_object_or_404(User, username=username)
-    return render(request, 'posts/user_posts.html', {'profile_user': user})
-
-
-@require_http_methods(["GET"])
-def explore_room_page(request):
-    return render(request, 'explore_room.html')
-
-
-@require_http_methods(["GET"])
-def post_detail_page(request, post_id):
-    return render(request, 'posts/post_detail.html', {'post_id': post_id})
-
+# ════════════════════════════════════════════════════════════
+# 🔐 Authentication Endpoints
+# ════════════════════════════════════════════════════════════
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def signup(request):
+    """Register a new user"""
     try:
         data = json.loads(request.body)
         username = data.get('username', '').strip()
@@ -112,6 +166,7 @@ def signup(request):
         password = data.get('password', '')
         password_confirm = data.get('password_confirm', '')
 
+        # Validation
         if not all([username, email, password, password_confirm]):
             return JsonResponse({
                 'success': False,
@@ -142,6 +197,7 @@ def signup(request):
                 'message': 'Email already exists'
             }, status=400)
 
+        # Create user
         user = User.objects.create_user(
             username=username,
             email=email,
@@ -149,24 +205,29 @@ def signup(request):
             is_active=False
         )
 
+        # Send verification email
         verification_token = user.generate_email_verification_token()
         user.email_verification_sent_at = timezone.now()
         user.save()
 
         host = request.scheme + '://' + request.get_host()
         verification_link = f"{host}/api/verify-email/{verification_token}/"
-        send_mail(
-            'Email Verification',
-            f'Click this link to verify your email: {verification_link}',
-            settings.DEFAULT_FROM_EMAIL or 'noreply@example.com',
-            [user.email],
-            fail_silently=False,
-        )
+        
+        try:
+            send_mail(
+                'Email Verification',
+                f'Click this link to verify your email: {verification_link}',
+                settings.DEFAULT_FROM_EMAIL or 'noreply@example.com',
+                [user.email],
+                fail_silently=False,
+            )
+        except Exception as e:
+            print(f"Email sending failed: {e}")
 
         return JsonResponse({
             'success': True,
             'message': 'Signup successful. Please check your email to verify your account.',
-            'user_id': user.id
+            'user': serialize_user(user, include_sensitive=True)
         }, status=201)
 
     except json.JSONDecodeError:
@@ -182,224 +243,23 @@ def signup(request):
 
 
 @csrf_exempt
-@require_http_methods(["GET", "POST"])
-def posts_list_create(request):
-    if request.method == 'GET':
-        posts = Post.objects.filter(parent=None).select_related('author').prefetch_related('media', 'mentions').order_by('-created_at')[:100]
-        return JsonResponse({'success': True, 'posts': [serialize_post(p, include_user_info=True) for p in posts]})
-
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
-
-    content = request.POST.get('content', '').strip()
-    tags = request.POST.get('tags', '').strip()
-    mentions_raw = request.POST.get('mentions', '').strip()
-    parent_id = request.POST.get('parent')
-    category = request.POST.get('category', '').strip()
-
-    if not content and not request.FILES:
-        return JsonResponse({'success': False, 'message': 'Post content or media required'}, status=400)
-
-    # Category is required for main posts (not replies)
-    if not parent_id and not category:
-        return JsonResponse({'success': False, 'message': 'Room/Category is required'}, status=400)
-
-    parent = None
-    if parent_id:
-        parent = Post.objects.filter(id=parent_id).first()
-
-    post = Post.objects.create(author=request.user, content=content, tags=tags, parent=parent, category=category)
-
-    if mentions_raw:
-        usernames = [u.strip() for u in mentions_raw.split(',') if u.strip()]
-        mentioned_users = User.objects.filter(username__in=usernames)
-        for mu in mentioned_users:
-            post.mentions.add(mu)
-            if mu != request.user:
-                Notification.objects.create(recipient=mu, sender=request.user, notif_type='mention', post=post, message=f'{request.user.username} mentioned you')
-
-    for f in request.FILES.getlist('media'):
-        ctype = f.content_type or mimetypes.guess_type(f.name)[0] or ''
-        if ctype.startswith('image/'):
-            mtype = 'image'
-        elif ctype.startswith('video/'):
-            mtype = 'video'
-        elif ctype.startswith('audio/'):
-            mtype = 'audio'
-        else:
-            mtype = 'file'
-        PostMedia.objects.create(post=post, file=f, media_type=mtype)
-
-    return JsonResponse({'success': True, 'post': serialize_post(post, include_user_info=True)}, status=201)
-
-
-@require_http_methods(["GET"])
-def post_detail(request, post_id):
-    post = get_object_or_404(Post, id=post_id)
-    data = serialize_post(post, include_user_info=True)
-    
-    # Get all comments
-    comments = Comment.objects.filter(post=post).select_related('user').order_by('created_at')
-    data['comments'] = [serialize_comment(c) for c in comments]
-    
-    # Get all replies
-    replies = Post.objects.filter(parent=post).select_related('author').prefetch_related('media', 'mentions').order_by('created_at')
-    data['replies'] = [serialize_post(r, include_user_info=True) for r in replies]
-    
-    return JsonResponse({'success': True, 'post': data})
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def post_like(request, post_id):
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
-    post = get_object_or_404(Post, id=post_id)
-    r = Reaction.objects.filter(user=request.user, post=post).first()
-    if r and r.reaction == 'like':
-        r.delete()
-        likes_count = post.reactions.filter(reaction='like').count()
-        return JsonResponse({'success': True, 'message': 'Unliked', 'likes_count': likes_count})
-    else:
-        if r:
-            r.reaction = 'like'
-            r.save()
-        else:
-            Reaction.objects.create(user=request.user, post=post, reaction='like')
-        if post.author != request.user:
-            Notification.objects.create(recipient=post.author, sender=request.user, notif_type='like', post=post, message=f'{request.user.username} liked your post')
-        return JsonResponse({'success': True, 'message': 'Liked', 'likes_count': post.reactions.filter(reaction='like').count()})
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def post_comment(request, post_id):
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
-    post = get_object_or_404(Post, id=post_id)
-    try:
-        data = json.loads(request.body)
-    except Exception:
-        return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
-    content = data.get('content', '').strip()
-    parent_id = data.get('parent')
-    if not content:
-        return JsonResponse({'success': False, 'message': 'Comment content required'}, status=400)
-    parent = None
-    if parent_id:
-        parent = Comment.objects.filter(id=parent_id, post=post).first()
-    comment = Comment.objects.create(user=request.user, post=post, content=content, parent=parent)
-    if post.author != request.user:
-        Notification.objects.create(recipient=post.author, sender=request.user, notif_type='comment', post=post, comment=comment, message=f'{request.user.username} commented on your post')
-    return JsonResponse({'success': True, 'comment_id': comment.id, 'comments_count': post.comments.count()})
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def post_dislike(request, post_id):
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
-    post = get_object_or_404(Post, id=post_id)
-    r = Reaction.objects.filter(user=request.user, post=post).first()
-    if r and r.reaction == 'dislike':
-        r.delete()
-        dislikes_count = post.reactions.filter(reaction='dislike').count()
-        return JsonResponse({'success': True, 'message': 'Removed dislike', 'dislikes_count': dislikes_count})
-    else:
-        if r:
-            r.reaction = 'dislike'
-            r.save()
-        else:
-            Reaction.objects.create(user=request.user, post=post, reaction='dislike')
-        return JsonResponse({'success': True, 'message': 'Disliked', 'dislikes_count': post.reactions.filter(reaction='dislike').count()})
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def post_repost(request, post_id):
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
-    post = get_object_or_404(Post, id=post_id)
-    new_post = Post.objects.create(author=request.user, content=post.content, is_repost=True, original_post=post, tags=post.tags, category=post.category)
-    for mu in post.mentions.all():
-        new_post.mentions.add(mu)
-    for m in post.media.all():
-        PostMedia.objects.create(post=new_post, file=m.file, media_type=m.media_type)
-    if post.author != request.user:
-        Notification.objects.create(recipient=post.author, sender=request.user, notif_type='repost', post=post, message=f'{request.user.username} reposted your post')
-    return JsonResponse({'success': True, 'post': serialize_post(new_post, include_user_info=True)})
-
-
-@require_http_methods(["GET"])
-def posts_by_category(request, category_id):
-    posts = Post.objects.filter(category=category_id, parent=None).select_related('author').prefetch_related('media', 'mentions').order_by('-created_at')[:100]
-    return JsonResponse({'success': True, 'posts': [serialize_post(p, include_user_info=True) for p in posts], 'category': category_id})
-
-
-@require_http_methods(["GET"])
-def user_posts(request, username):
-    user = get_object_or_404(User, username=username)
-    posts = Post.objects.filter(author=user, parent=None).select_related('author').prefetch_related('media', 'mentions').order_by('-created_at')[:100]
-    return JsonResponse({'success': True, 'posts': [serialize_post(p, include_user_info=True) for p in posts], 'username': username})
-
-
-@require_http_methods(["GET"])
-def post_thread(request, post_id):
-    post = get_object_or_404(Post, id=post_id)
-    data = serialize_post(post, include_user_info=True)
-    replies = [serialize_post(r, include_user_info=True) for r in post.replies.select_related('author').prefetch_related('media','mentions').order_by('created_at')]
-    data['replies'] = replies
-    return JsonResponse({'success': True, 'thread': data})
-
-
-@require_http_methods(["GET"])
-def notifications_list(request):
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
-    notifs = Notification.objects.filter(recipient=request.user).order_by('-created_at')[:100]
-    data = []
-    for n in notifs:
-        data.append({
-            'id': n.id,
-            'sender': n.sender.username,
-            'type': n.notif_type,
-            'post_id': n.post.id if n.post else None,
-            'comment_id': n.comment.id if n.comment else None,
-            'message': n.message,
-            'is_read': n.is_read,
-            'created_at': n.created_at.isoformat(),
-        })
-    return JsonResponse({'success': True, 'notifications': data})
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def notifications_mark_read(request):
-    if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
-    try:
-        data = json.loads(request.body)
-    except Exception:
-        return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
-    ids = data.get('ids', [])
-    Notification.objects.filter(recipient=request.user, id__in=ids).update(is_read=True)
-    return JsonResponse({'success': True})
-
-
-@csrf_exempt
 @require_http_methods(["GET"])
 def verify_email(request, token):
+    """Verify user email"""
     try:
         user = get_object_or_404(User, email_verification_token=token)
+        
         token_age = timezone.now() - user.email_verification_sent_at
         if token_age > timedelta(hours=24):
             return JsonResponse({
                 'success': False,
                 'message': 'Verification token has expired'
             }, status=400)
+        
         user.verify_email()
         user.is_active = True
         user.save()
+        
         return JsonResponse({
             'success': True,
             'message': 'Email verified successfully. You can now login.'
@@ -414,6 +274,7 @@ def verify_email(request, token):
 @csrf_exempt
 @require_http_methods(["POST"])
 def login_user(request):
+    """User login"""
     try:
         data = json.loads(request.body)
         username_or_email = data.get('username_or_email', '').strip()
@@ -426,7 +287,9 @@ def login_user(request):
                 'message': 'Username/Email and password are required'
             }, status=400)
 
-        user = User.objects.filter(email=username_or_email).first() or User.objects.filter(username=username_or_email).first()
+        # Find user
+        user = User.objects.filter(email=username_or_email).first() or \
+               User.objects.filter(username=username_or_email).first()
 
         if user and user.check_password(password):
             if not user.is_active:
@@ -436,24 +299,17 @@ def login_user(request):
                 }, status=400)
 
             login(request, user)
+            
+            # Set session expiry
             if remember:
-                try:
-                    request.session.set_expiry(60 * 60 * 24 * 30)
-                except Exception:
-                    pass
+                request.session.set_expiry(60 * 60 * 24 * 30)  # 30 days
             else:
-                try:
-                    request.session.set_expiry(0)
-                except Exception:
-                    pass
+                request.session.set_expiry(0)  # Browser close
+            
             return JsonResponse({
                 'success': True,
                 'message': 'Login successful',
-                'user': {
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                }
+                'user': serialize_user(user, include_sensitive=True)
             })
         else:
             return JsonResponse({
@@ -476,6 +332,7 @@ def login_user(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def logout_user(request):
+    """User logout"""
     logout(request)
     return JsonResponse({
         'success': True,
@@ -483,85 +340,10 @@ def logout_user(request):
     })
 
 
-@require_http_methods(["GET"])
-def get_profile(request):
-    if not request.user.is_authenticated:
-        return JsonResponse({
-            'success': False,
-            'message': 'User not authenticated'
-        }, status=401)
-
-    user = request.user
-    return JsonResponse({
-        'success': True,
-        'user': {
-            'id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-            'student_id': user.student_id,
-            'bio': user.bio,
-            'is_email_verified': user.is_email_verified,
-            'profile_picture': user.profile_picture.url if user.profile_picture else None,
-        }
-    })
-
-
-@csrf_exempt
-@require_http_methods(["PUT", "POST"])
-def update_profile(request):
-    if not request.user.is_authenticated:
-        return JsonResponse({
-            'success': False,
-            'message': 'User not authenticated'
-        }, status=401)
-
-    try:
-        data = json.loads(request.body)
-        user = request.user
-
-        if 'first_name' in data:
-            user.first_name = data['first_name']
-        if 'last_name' in data:
-            user.last_name = data['last_name']
-        if 'student_id' in data:
-            user.student_id = data['student_id']
-        if 'bio' in data:
-            user.bio = data['bio']
-
-        user.save()
-
-        return JsonResponse({
-            'success': True,
-            'message': 'Profile updated successfully',
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'student_id': user.student_id,
-                'bio': user.bio,
-                'profile_picture': user.profile_picture.url if user.profile_picture else None,
-            }
-        })
-
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'success': False,
-            'message': 'Invalid JSON'
-        }, status=400)
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'message': str(e)
-        }, status=500)
-
-
 @csrf_exempt
 @require_http_methods(["POST"])
 def request_password_reset(request):
+    """Request password reset"""
     try:
         data = json.loads(request.body)
         email = data.get('email', '').strip()
@@ -580,14 +362,18 @@ def request_password_reset(request):
             user.save()
 
             host = request.scheme + '://' + request.get_host()
-            reset_link = f"{host}/reset-password/?token={reset_token}"
-            send_mail(
-                'Password Reset Request',
-                f'Click this link to reset your password: {reset_link}',
-                settings.DEFAULT_FROM_EMAIL or 'noreply@example.com',
-                [user.email],
-                fail_silently=False,
-            )
+            reset_link = f"{host}/api/password-reset/{reset_token}/"
+            
+            try:
+                send_mail(
+                    'Password Reset Request',
+                    f'Click this link to reset your password: {reset_link}',
+                    settings.DEFAULT_FROM_EMAIL or 'noreply@example.com',
+                    [user.email],
+                    fail_silently=False,
+                )
+            except Exception as e:
+                print(f"Email sending failed: {e}")
 
         return JsonResponse({
             'success': True,
@@ -609,6 +395,7 @@ def request_password_reset(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def reset_password(request, token):
+    """Reset password with token"""
     try:
         user = get_object_or_404(User, password_reset_token=token)
 
@@ -658,9 +445,83 @@ def reset_password(request, token):
         }, status=500)
 
 
+# ════════════════════════════════════════════════════════════
+# 👤 Profile Endpoints
+# ════════════════════════════════════════════════════════════
+
+@require_http_methods(["GET"])
+def get_profile(request):
+    """Get current user profile"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'User not authenticated'
+        }, status=401)
+
+    return JsonResponse({
+        'success': True,
+        'user': serialize_user(request.user, include_sensitive=True)
+    })
+
+
+@require_http_methods(["GET"])
+def get_user_profile(request, username):
+    """Get any user's public profile"""
+    user = get_object_or_404(User, username=username)
+    
+    # If it's the current user, include sensitive info
+    include_sensitive = request.user.is_authenticated and request.user.id == user.id
+    
+    return JsonResponse({
+        'success': True,
+        'user': serialize_user(user, include_sensitive=include_sensitive)
+    })
+
+
+@csrf_exempt
+@require_http_methods(["PUT", "POST", "PATCH"])
+def update_profile(request):
+    """Update user profile"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'User not authenticated'
+        }, status=401)
+
+    try:
+        data = json.loads(request.body)
+        user = request.user
+
+        # Update allowed fields
+        allowed_fields = ['first_name', 'last_name', 'student_id', 'bio']
+        for field in allowed_fields:
+            if field in data:
+                setattr(user, field, data[field])
+
+        user.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Profile updated successfully',
+            'user': serialize_user(user, include_sensitive=True)
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def update_profile_picture(request):
+    """Update profile picture"""
     if not request.user.is_authenticated:
         return JsonResponse({
             'success': False,
@@ -677,6 +538,7 @@ def update_profile_picture(request):
         profile_picture = request.FILES['profile_picture']
         user = request.user
 
+        # Delete old picture
         if user.profile_picture:
             if user.profile_picture.name:
                 user.profile_picture.delete(save=False)
@@ -695,3 +557,432 @@ def update_profile_picture(request):
             'success': False,
             'message': str(e)
         }, status=500)
+
+
+# ════════════════════════════════════════════════════════════
+# 📝 Post Endpoints
+# ════════════════════════════════════════════════════════════
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def posts_list_create(request):
+    """List all posts or create new post"""
+    
+    if request.method == 'GET':
+        # Get query parameters
+        category = request.GET.get('category')
+        limit = int(request.GET.get('limit', 100))
+        
+        # Build query
+        query = Post.objects.filter(parent=None)
+        if category:
+            query = query.filter(category=category)
+        
+        posts = query.select_related('author').prefetch_related(
+            'media', 'mentions'
+        ).order_by('-created_at')[:limit]
+        
+        return JsonResponse({
+            'success': True,
+            'posts': [serialize_post(p, include_user_info=True, current_user=request.user) for p in posts],
+            'count': len(posts)
+        })
+    
+    # POST - Create new post
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'Authentication required'
+        }, status=401)
+
+    content = request.POST.get('content', '').strip()
+    tags = request.POST.get('tags', '').strip()
+    mentions_raw = request.POST.get('mentions', '').strip()
+    parent_id = request.POST.get('parent')
+    category = request.POST.get('category', '').strip()
+
+    if not content and not request.FILES:
+        return JsonResponse({
+            'success': False,
+            'message': 'Post content or media required'
+        }, status=400)
+
+    # Category is required for main posts (not replies)
+    if not parent_id and not category:
+        return JsonResponse({
+            'success': False,
+            'message': 'Room/Category is required'
+        }, status=400)
+
+    parent = None
+    if parent_id:
+        parent = Post.objects.filter(id=parent_id).first()
+
+    post = Post.objects.create(
+        author=request.user,
+        content=content,
+        tags=tags,
+        parent=parent,
+        category=category
+    )
+
+    # Handle mentions
+    if mentions_raw:
+        usernames = [u.strip() for u in mentions_raw.split(',') if u.strip()]
+        mentioned_users = User.objects.filter(username__in=usernames)
+        for mu in mentioned_users:
+            post.mentions.add(mu)
+            if mu != request.user:
+                Notification.objects.create(
+                    recipient=mu,
+                    sender=request.user,
+                    notif_type='mention',
+                    post=post,
+                    message=f'{request.user.username} mentioned you'
+                )
+
+    # Handle media files
+    for f in request.FILES.getlist('media'):
+        ctype = f.content_type or mimetypes.guess_type(f.name)[0] or ''
+        if ctype.startswith('image/'):
+            mtype = 'image'
+        elif ctype.startswith('video/'):
+            mtype = 'video'
+        elif ctype.startswith('audio/'):
+            mtype = 'audio'
+        else:
+            mtype = 'file'
+        PostMedia.objects.create(post=post, file=f, media_type=mtype)
+
+    return JsonResponse({
+        'success': True,
+        'post': serialize_post(post, include_user_info=True, current_user=request.user)
+    }, status=201)
+
+
+@require_http_methods(["GET"])
+def post_detail(request, post_id):
+    """Get single post details with comments and replies"""
+    post = get_object_or_404(Post, id=post_id)
+    data = serialize_post(post, include_user_info=True, current_user=request.user)
+    
+    # Get comments
+    comments = Comment.objects.filter(post=post).select_related('user').order_by('created_at')
+    data['comments'] = [serialize_comment(c) for c in comments]
+    
+    # Get replies
+    replies = Post.objects.filter(parent=post).select_related('author').prefetch_related(
+        'media', 'mentions'
+    ).order_by('created_at')
+    data['replies'] = [serialize_post(r, include_user_info=True, current_user=request.user) for r in replies]
+    
+    return JsonResponse({
+        'success': True,
+        'post': data
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def post_like(request, post_id):
+    """Like/unlike a post"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'Authentication required'
+        }, status=401)
+    
+    post = get_object_or_404(Post, id=post_id)
+    r = Reaction.objects.filter(user=request.user, post=post).first()
+    
+    if r and r.reaction == 'like':
+        # Unlike
+        r.delete()
+        likes_count = post.reactions.filter(reaction='like').count()
+        return JsonResponse({
+            'success': True,
+            'message': 'Unliked',
+            'likes_count': likes_count,
+            'user_reaction': None
+        })
+    else:
+        # Like
+        if r:
+            r.reaction = 'like'
+            r.save()
+        else:
+            Reaction.objects.create(user=request.user, post=post, reaction='like')
+        
+        if post.author != request.user:
+            Notification.objects.create(
+                recipient=post.author,
+                sender=request.user,
+                notif_type='like',
+                post=post,
+                message=f'{request.user.username} liked your post'
+            )
+        
+        likes_count = post.reactions.filter(reaction='like').count()
+        return JsonResponse({
+            'success': True,
+            'message': 'Liked',
+            'likes_count': likes_count,
+            'user_reaction': 'like'
+        })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def post_dislike(request, post_id):
+    """Dislike/remove dislike from a post"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'Authentication required'
+        }, status=401)
+    
+    post = get_object_or_404(Post, id=post_id)
+    r = Reaction.objects.filter(user=request.user, post=post).first()
+    
+    if r and r.reaction == 'dislike':
+        # Remove dislike
+        r.delete()
+        dislikes_count = post.reactions.filter(reaction='dislike').count()
+        return JsonResponse({
+            'success': True,
+            'message': 'Removed dislike',
+            'dislikes_count': dislikes_count,
+            'user_reaction': None
+        })
+    else:
+        # Dislike
+        if r:
+            r.reaction = 'dislike'
+            r.save()
+        else:
+            Reaction.objects.create(user=request.user, post=post, reaction='dislike')
+        
+        dislikes_count = post.reactions.filter(reaction='dislike').count()
+        return JsonResponse({
+            'success': True,
+            'message': 'Disliked',
+            'dislikes_count': dislikes_count,
+            'user_reaction': 'dislike'
+        })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def post_comment(request, post_id):
+    """Add comment to a post"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'Authentication required'
+        }, status=401)
+    
+    post = get_object_or_404(Post, id=post_id)
+    
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid JSON'
+        }, status=400)
+    
+    content = data.get('content', '').strip()
+    parent_id = data.get('parent')
+    
+    if not content:
+        return JsonResponse({
+            'success': False,
+            'message': 'Comment content required'
+        }, status=400)
+    
+    parent = None
+    if parent_id:
+        parent = Comment.objects.filter(id=parent_id, post=post).first()
+    
+    comment = Comment.objects.create(
+        user=request.user,
+        post=post,
+        content=content,
+        parent=parent
+    )
+    
+    if post.author != request.user:
+        Notification.objects.create(
+            recipient=post.author,
+            sender=request.user,
+            notif_type='comment',
+            post=post,
+            comment=comment,
+            message=f'{request.user.username} commented on your post'
+        )
+    
+    return JsonResponse({
+        'success': True,
+        'comment': serialize_comment(comment),
+        'comments_count': post.comments.count()
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def post_repost(request, post_id):
+    """Repost a post"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'Authentication required'
+        }, status=401)
+    
+    post = get_object_or_404(Post, id=post_id)
+    
+    new_post = Post.objects.create(
+        author=request.user,
+        content=post.content,
+        is_repost=True,
+        original_post=post,
+        tags=post.tags,
+        category=post.category
+    )
+    
+    for mu in post.mentions.all():
+        new_post.mentions.add(mu)
+    
+    for m in post.media.all():
+        PostMedia.objects.create(post=new_post, file=m.file, media_type=m.media_type)
+    
+    if post.author != request.user:
+        Notification.objects.create(
+            recipient=post.author,
+            sender=request.user,
+            notif_type='repost',
+            post=post,
+            message=f'{request.user.username} reposted your post'
+        )
+    
+    return JsonResponse({
+        'success': True,
+        'post': serialize_post(new_post, include_user_info=True, current_user=request.user)
+    })
+
+
+@require_http_methods(["GET"])
+def posts_by_category(request, category_id):
+    """Get posts by category/room"""
+    posts = Post.objects.filter(
+        category=category_id,
+        parent=None
+    ).select_related('author').prefetch_related(
+        'media', 'mentions'
+    ).order_by('-created_at')[:100]
+    
+    return JsonResponse({
+        'success': True,
+        'posts': [serialize_post(p, include_user_info=True, current_user=request.user) for p in posts],
+        'category': category_id,
+        'count': len(posts)
+    })
+
+
+@require_http_methods(["GET"])
+def user_posts(request, username):
+    """Get posts by specific user"""
+    user = get_object_or_404(User, username=username)
+    posts = Post.objects.filter(
+        author=user,
+        parent=None
+    ).select_related('author').prefetch_related(
+        'media', 'mentions'
+    ).order_by('-created_at')[:100]
+    
+    return JsonResponse({
+        'success': True,
+        'posts': [serialize_post(p, include_user_info=True, current_user=request.user) for p in posts],
+        'username': username,
+        'user': serialize_user(user, include_sensitive=False),
+        'count': len(posts)
+    })
+
+
+@require_http_methods(["GET"])
+def post_thread(request, post_id):
+    """Get post thread (post with all its replies)"""
+    post = get_object_or_404(Post, id=post_id)
+    data = serialize_post(post, include_user_info=True, current_user=request.user)
+    
+    replies = [
+        serialize_post(r, include_user_info=True, current_user=request.user)
+        for r in post.replies.select_related('author').prefetch_related(
+            'media', 'mentions'
+        ).order_by('created_at')
+    ]
+    data['replies'] = replies
+    
+    return JsonResponse({
+        'success': True,
+        'thread': data
+    })
+
+
+# ════════════════════════════════════════════════════════════
+# 🔔 Notification Endpoints
+# ════════════════════════════════════════════════════════════
+
+@require_http_methods(["GET"])
+def notifications_list(request):
+    """Get user notifications"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'Authentication required'
+        }, status=401)
+    
+    notifs = Notification.objects.filter(
+        recipient=request.user
+    ).select_related('sender', 'post', 'comment').order_by('-created_at')[:100]
+    
+    return JsonResponse({
+        'success': True,
+        'notifications': [serialize_notification(n) for n in notifs],
+        'unread_count': notifs.filter(is_read=False).count()
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def notifications_mark_read(request):
+    """Mark notifications as read"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'Authentication required'
+        }, status=401)
+    
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid JSON'
+        }, status=400)
+    
+    ids = data.get('ids', [])
+    
+    if not ids:
+        # Mark all as read
+        Notification.objects.filter(recipient=request.user).update(is_read=True)
+    else:
+        # Mark specific notifications as read
+        Notification.objects.filter(
+            recipient=request.user,
+            id__in=ids
+        ).update(is_read=True)
+    
+    return JsonResponse({
+        'success': True,
+        'message': 'Notifications marked as read'
+    })

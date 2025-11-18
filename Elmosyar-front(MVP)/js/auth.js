@@ -1,156 +1,88 @@
-// Authentication functions
-let currentUser = null;
-
-function checkAuth() {
-    const userData = localStorage.getItem('currentUser');
-    if (userData) {
-        currentUser = JSON.parse(userData);
-        updateNavbar();
-        return true;
+class Auth {
+    constructor() {
+        this.currentUser = null;
+        this.checkAuth();
     }
-    return false;
-}
 
-function updateNavbar() {
-    const authButtons = document.getElementById('auth-buttons');
-    const userMenu = document.getElementById('user-menu');
-    
-    if (currentUser) {
-        authButtons.style.display = 'none';
-        userMenu.style.display = 'block';
-    } else {
-        authButtons.style.display = 'block';
-        userMenu.style.display = 'none';
+    async checkAuth() {
+        const { success, data } = await apiCall('/profile/');
+        if (success) {
+            this.currentUser = data.user;
+            this.updateUI();
+        } else {
+            this.currentUser = null;
+            this.updateUI();
+        }
     }
-}
 
-async function login(email, password, remember = false) {
-    showLoading();
-    try {
-        const { data } = await api.post('/api/login/', {
-            username_or_email: email,
-            password: password,
-            remember: remember
+    async login(credentials) {
+        const { success, data } = await apiCall('/login/', {
+            method: 'POST',
+            body: JSON.stringify(credentials)
         });
-        
-        if (data.success) {
-            currentUser = data.user;
-            localStorage.setItem('currentUser', JSON.stringify(data.user));
-            updateNavbar();
+
+        if (success) {
+            this.currentUser = data.user;
+            this.updateUI();
             showMessage('ورود موفقیت‌آمیز بود!');
-            showPage('home');
+            loadPage('feed');
             return true;
         } else {
-            showMessage(data.message, 'error');
+            showMessage(data.message || 'خطا در ورود', 'error');
             return false;
         }
-    } catch (error) {
-        showMessage('خطا در ارتباط با سرور', 'error');
-        return false;
-    } finally {
-        hideLoading();
     }
-}
 
-async function signup(username, email, password, passwordConfirm) {
-    showLoading();
-    try {
-        const { data } = await api.post('/api/signup/', {
-            username: username,
-            email: email,
-            password: password,
-            password_confirm: passwordConfirm
+    async signup(userData) {
+        const { success, data } = await apiCall('/signup/', {
+            method: 'POST',
+            body: JSON.stringify(userData)
         });
-        
-        if (data.success) {
-            showMessage('ثبت‌نام موفقیت‌آمیز بود. لطفا ایمیل خود را بررسی کنید.');
-            showPage('login');
+
+        if (success) {
+            showMessage('ثبت‌نام موفقیت‌آمیز بود! لطفا ایمیل خود را بررسی کنید.');
+            loadPage('login');
             return true;
         } else {
-            showMessage(data.message, 'error');
+            showMessage(data.message || 'خطا در ثبت‌نام', 'error');
             return false;
         }
-    } catch (error) {
-        showMessage('خطا در ارتباط با سرور', 'error');
-        return false;
-    } finally {
-        hideLoading();
     }
-}
 
-async function requestPasswordReset(email) {
-    showLoading();
-    try {
-        const { data } = await api.post('/api/password-reset/request/', {
-            email: email
+    async logout() {
+        const { success } = await apiCall('/logout/', {
+            method: 'POST'
         });
-        
-        if (data.success) {
-            showMessage('ایمیل بازیابی رمز عبور ارسال شد. لطفا صندوق ایمیل خود را بررسی کنید.');
-            showPage('login');
-            return true;
-        } else {
-            showMessage(data.message, 'error');
-            return false;
+
+        if (success) {
+            this.currentUser = null;
+            this.updateUI();
+            showMessage('خروج موفقیت‌آمیز بود!');
+            loadPage('login');
         }
-    } catch (error) {
-        showMessage('خطا در ارتباط با سرور', 'error');
-        return false;
-    } finally {
-        hideLoading();
     }
-}
 
-async function resetPassword(token, password, passwordConfirm) {
-    showLoading();
-    try {
-        const { data } = await api.post(`/api/password-reset/${token}/`, {
-            password: password,
-            password_confirm: passwordConfirm
-        });
+    updateUI() {
+        const nav = document.getElementById('nav');
         
-        if (data.success) {
-            showMessage('رمز عبور با موفقیت تغییر کرد. اکنون می‌توانید وارد شوید.');
-            showPage('login');
-            return true;
+        if (this.currentUser) {
+            nav.innerHTML = `
+                <a href="#" onclick="loadPage('feed')">فید</a>
+                <a href="#" onclick="loadPage('profile')">پروفایل</a>
+                <a href="#" onclick="loadPage('notifications')">اعلان‌ها</a>
+                <a href="#" onclick="auth.logout()">خروج</a>
+            `;
         } else {
-            showMessage(data.message, 'error');
-            return false;
+            nav.innerHTML = `
+                <a href="#" onclick="loadPage('login')">ورود</a>
+                <a href="#" onclick="loadPage('signup')">ثبت‌نام</a>
+            `;
         }
-    } catch (error) {
-        showMessage('خطا در ارتباط با سرور', 'error');
-        return false;
-    } finally {
-        hideLoading();
+    }
+
+    isAuthenticated() {
+        return this.currentUser !== null;
     }
 }
 
-async function logout() {
-    showLoading();
-    try {
-        await api.post('/api/logout/');
-        
-        currentUser = null;
-        localStorage.removeItem('currentUser');
-        updateNavbar();
-        showMessage('خروج موفقیت‌آمیز بود');
-        showPage('home');
-    } catch (error) {
-        showMessage('خطا در خروج', 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-// Export for use in other files
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { 
-        checkAuth, 
-        login, 
-        signup, 
-        logout, 
-        currentUser,
-        requestPasswordReset,
-        resetPassword
-    };
-}
+const auth = new Auth();

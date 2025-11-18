@@ -1,329 +1,288 @@
-// Main application controller
-document.addEventListener('DOMContentLoaded', function() {
-    // Check authentication status
-    checkAuth();
-    
-    // Load initial page based on URL hash
-    const hash = window.location.hash || '#home';
-    const pageName = hash.substring(1).split('?')[0];
-    showPage(pageName);
-    
-    // Handle browser back/forward
-    window.addEventListener('hashchange', function() {
-        const page = window.location.hash.substring(1).split('?')[0];
-        showPage(page);
-    });
-});
+// Page management
+async function loadPage(page, param = null) {
+    const content = document.getElementById('content');
+    content.innerHTML = '<div class="loading">در حال بارگذاری...</div>';
 
-function showPage(pageName) {
-    // Default to home if empty
-    if (!pageName || pageName === '') {
-        pageName = 'home';
+    switch (page) {
+        case 'login':
+            await loadLoginPage();
+            break;
+        case 'signup':
+            await loadSignupPage();
+            break;
+        case 'feed':
+            await loadFeedPage();
+            break;
+        case 'profile':
+            await loadProfilePage();
+            break;
+        case 'notifications':
+            await loadNotificationsPage();
+            break;
+        case 'post-detail':
+            await loadPostDetailPage(param);
+            break;
+        default:
+            content.innerHTML = '<div class="welcome">صفحه مورد نظر یافت نشد</div>';
     }
-    
-    // Hide all pages
-    document.querySelectorAll('.page').forEach(page => {
-        page.classList.remove('active');
-    });
-    
-    // Show loading
-    showLoading();
-    
-    // Load the requested page
-    setTimeout(() => {
-        loadPageContent(pageName);
-    }, 100);
 }
 
-async function loadPageContent(pageName) {
-    try {
-        const response = await fetch(`pages/${pageName}.html`);
-        
-        if (!response.ok) {
-            throw new Error('Page not found');
-        }
-        
-        const html = await response.text();
-        document.getElementById('main-content').innerHTML = html;
-        
-        // Initialize page-specific functionality
-        await initializePage(pageName);
-        
-        // Update URL hash without triggering hashchange
-        const currentHash = window.location.hash.substring(1).split('?')[0];
-        if (currentHash !== pageName) {
-            // Preserve query parameters if any
-            const queryString = window.location.hash.includes('?') 
-                ? '?' + window.location.hash.split('?')[1] 
-                : '';
-            window.history.pushState(null, '', `#${pageName}${queryString}`);
-        }
-        
-    } catch (error) {
-        console.error('Error loading page:', error);
-        document.getElementById('main-content').innerHTML = `
-            <div class="card">
-                <h2>خطا در بارگذاری صفحه</h2>
-                <p>صفحه مورد نظر یافت نشد.</p>
-                <button class="btn btn-primary" onclick="showPage('home')">بازگشت به خانه</button>
+async function loadLoginPage() {
+    const content = document.getElementById('content');
+    content.innerHTML = `
+        <div class="form-container">
+            <h2>ورود به حساب کاربری</h2>
+            <form onsubmit="event.preventDefault(); handleLogin(this)">
+                <div class="form-group">
+                    <label for="username">نام کاربری یا ایمیل:</label>
+                    <input type="text" id="username" name="username_or_email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">رمز عبور:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="remember"> مرا به خاطر بسپار
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">ورود</button>
+            </form>
+            <p class="text-center mt-2">
+                حساب کاربری ندارید؟ 
+                <a href="#" onclick="loadPage('signup')">ثبت‌نام کنید</a>
+            </p>
+        </div>
+    `;
+}
+
+async function loadSignupPage() {
+    const content = document.getElementById('content');
+    content.innerHTML = `
+        <div class="form-container">
+            <h2>ثبت‌نام</h2>
+            <form onsubmit="event.preventDefault(); handleSignup(this)">
+                <div class="form-group">
+                    <label for="signup-username">نام کاربری:</label>
+                    <input type="text" id="signup-username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="signup-email">ایمیل:</label>
+                    <input type="email" id="signup-email" name="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="signup-password">رمز عبور:</label>
+                    <input type="password" id="signup-password" name="password" required>
+                </div>
+                <div class="form-group">
+                    <label for="signup-password-confirm">تکرار رمز عبور:</label>
+                    <input type="password" id="signup-password-confirm" name="password_confirm" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">ثبت‌نام</button>
+            </form>
+            <p class="text-center mt-2">
+                قبلاً ثبت‌نام کرده‌اید؟ 
+                <a href="#" onclick="loadPage('login')">وارد شوید</a>
+            </p>
+        </div>
+    `;
+}
+
+async function loadFeedPage() {
+    if (!auth.isAuthenticated()) {
+        showMessage('لطفاً ابتدا وارد شوید', 'error');
+        loadPage('login');
+        return;
+    }
+
+    const content = document.getElementById('content');
+    content.innerHTML = `
+        <div class="posts-container">
+            <div class="create-post mb-2">
+                <h3>ایجاد پست جدید</h3>
+                <form onsubmit="event.preventDefault(); handleCreatePost(this)">
+                    <div class="form-group">
+                        <textarea name="content" placeholder="چه چیزی در ذهن شماست؟..." required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <input type="text" name="category" placeholder="اتاق (مثلاً: programming, music, ...)" required>
+                    </div>
+                    <div class="form-group">
+                        <input type="text" name="tags" placeholder="تگ‌ها (با کاما جدا کنید)">
+                    </div>
+                    <div class="form-group">
+                        <input type="text" name="mentions" placeholder="منشن کاربران (با کاما جدا کنید)">
+                    </div>
+                    <div class="form-group">
+                        <input type="file" name="media" multiple accept="image/*,video/*,audio/*">
+                    </div>
+                    <button type="submit" class="btn btn-primary">ارسال پست</button>
+                </form>
+            </div>
+            <div id="posts-list">
+                <!-- Posts will be loaded here -->
+            </div>
+        </div>
+    `;
+
+    // Load posts
+    posts.loadPosts();
+}
+
+async function loadProfilePage() {
+    if (!auth.isAuthenticated()) {
+        showMessage('لطفاً ابتدا وارد شوید', 'error');
+        loadPage('login');
+        return;
+    }
+
+    const content = document.getElementById('content');
+    const user = auth.currentUser;
+
+    content.innerHTML = `
+        <div class="profile-header">
+            <img src="${user.profile_picture || '/static/default-avatar.png'}" 
+                 alt="Profile Picture" class="profile-picture">
+            <h2>${escapeHtml(user.first_name || '')} ${escapeHtml(user.last_name || '')}</h2>
+            <p>@${escapeHtml(user.username)}</p>
+            <p>${escapeHtml(user.bio || '')}</p>
+            <p>شماره دانشجویی: ${escapeHtml(user.student_id || '')}</p>
+        </div>
+
+        <div class="form-container">
+            <h3>ویرایش پروفایل</h3>
+            <form onsubmit="event.preventDefault(); handleUpdateProfile(this)">
+                <div class="form-group">
+                    <label>نام:</label>
+                    <input type="text" name="first_name" value="${escapeHtml(user.first_name || '')}">
+                </div>
+                <div class="form-group">
+                    <label>نام خانوادگی:</label>
+                    <input type="text" name="last_name" value="${escapeHtml(user.last_name || '')}">
+                </div>
+                <div class="form-group">
+                    <label>شماره دانشجویی:</label>
+                    <input type="text" name="student_id" value="${escapeHtml(user.student_id || '')}">
+                </div>
+                <div class="form-group">
+                    <label>بیوگرافی:</label>
+                    <textarea name="bio">${escapeHtml(user.bio || '')}</textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">ذخیره تغییرات</button>
+            </form>
+        </div>
+
+        <div class="mt-2">
+            <h3>پست‌های من</h3>
+            <div id="user-posts">
+                <!-- User posts will be loaded here -->
+            </div>
+        </div>
+    `;
+
+    // Load user posts
+    posts.loadUserPosts(user.username);
+}
+
+async function loadNotificationsPage() {
+    if (!auth.isAuthenticated()) {
+        showMessage('لطفاً ابتدا وارد شوید', 'error');
+        loadPage('login');
+        return;
+    }
+
+    const content = document.getElementById('content');
+    content.innerHTML = '<div class="loading">در حال بارگذاری اعلان‌ها...</div>';
+
+    const { success, data } = await apiCall('/notifications/');
+    
+    if (success) {
+        const notificationsHTML = data.notifications.map(notif => `
+            <div class="notification ${notif.is_read ? '' : 'unread'}">
+                <p><strong>${escapeHtml(notif.sender)}</strong> - ${escapeHtml(notif.message)}</p>
+                <small>${formatDate(notif.created_at)}</small>
+            </div>
+        `).join('');
+
+        content.innerHTML = `
+            <div class="notifications-container">
+                <h2>اعلان‌ها</h2>
+                ${notificationsHTML.length > 0 ? notificationsHTML : '<p>هیچ اعلانی وجود ندارد</p>'}
             </div>
         `;
-    } finally {
-        hideLoading();
+    } else {
+        showMessage('خطا در بارگذاری اعلان‌ها', 'error');
     }
 }
 
-async function initializePage(pageName) {
-    // First handle URL parameters
-    handleUrlParameters(pageName);
+async function loadPostDetailPage(postId) {
+    const content = document.getElementById('content');
+    content.innerHTML = '<div class="loading">در حال بارگذاری پست...</div>';
     
-    // Then setup event listeners
-    switch (pageName) {
-        case 'home':
-            if (currentUser) {
-                await loadPosts('home-posts', '/api/posts/');
-            } else {
-                const homePostsContainer = document.getElementById('home-posts');
-                if (homePostsContainer) {
-                    homePostsContainer.innerHTML = `
-                        <div class="card">
-                            <p style="text-align: center; color: #657786;">
-                                لطفا برای مشاهده پست‌ها 
-                                <a href="#login" onclick="showPage('login')">وارد شوید</a>
-                            </p>
-                        </div>
-                    `;
-                }
-            }
-            break;
-            
-        case 'login':
-            const loginForm = document.getElementById('login-form');
-            if (loginForm) {
-                loginForm.addEventListener('submit', handleLogin);
-            }
-            break;
-            
-        case 'signup':
-            const signupForm = document.getElementById('signup-form');
-            if (signupForm) {
-                signupForm.addEventListener('submit', handleSignup);
-            }
-            break;
-            
-        case 'forgot-password':
-            const forgotForm = document.getElementById('forgot-password-form');
-            if (forgotForm) {
-                forgotForm.addEventListener('submit', handleForgotPassword);
-            }
-            break;
-            
-        case 'reset-password':
-            const resetForm = document.getElementById('reset-password-form');
-            if (resetForm) {
-                resetForm.addEventListener('submit', handleResetPassword);
-            }
-            break;
-            
-        case 'profile':
-            // URL parameters are handled in handleUrlParameters
-            break;
-            
-        case 'create-post':
-            if (currentUser) {
-                const postForm = document.getElementById('post-form');
-                if (postForm) {
-                    postForm.addEventListener('submit', handleCreatePost);
-                }
-            } else {
-                showMessage('لطفا ابتدا وارد شوید', 'error');
-                showPage('login');
-            }
-            break;
-            
-        case 'explore':
-            const roomSearchForm = document.getElementById('room-search-form');
-            if (roomSearchForm) {
-                roomSearchForm.addEventListener('submit', handleRoomSearch);
-            }
-            break;
-            
-        case 'search':
-            const userSearchForm = document.getElementById('user-search-form');
-            if (userSearchForm) {
-                userSearchForm.addEventListener('submit', handleUserSearch);
-            }
-            break;
-            
-        case 'post-detail':
-        case 'user-posts':
-            // Already handled by their respective functions
-            break;
-    }
-}
-
-function handleUrlParameters(pageName) {
-    const urlParams = new URLSearchParams(window.location.hash.split('?')[1]);
-    
-    switch (pageName) {
-        case 'profile':
-            const user = urlParams.get('user');
-            if (user) {
-                loadUserProfile(decodeURIComponent(user));
-            } else if (currentUser) {
-                loadUserProfile(currentUser.username);
-            } else {
-                showMessage('لطفا ابتدا وارد شوید', 'error');
-                showPage('login');
-            }
-            break;
-            
-        case 'explore':
-            const room = urlParams.get('room');
-            if (room) {
-                showRoom(decodeURIComponent(room));
-            }
-            break;
-            
-        case 'reset-password':
-            const token = urlParams.get('token');
-            const resetForm = document.getElementById('reset-password-form');
-            if (token && resetForm) {
-                resetForm.dataset.token = token;
-            } else if (!token) {
-                showMessage('لینک بازیابی معتبر نیست', 'error');
-                showPage('login');
-            }
-            break;
-    }
+    await posts.loadPostDetail(postId);
 }
 
 // Form handlers
-async function handleLogin(e) {
-    e.preventDefault();
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
-    const remember = document.getElementById('login-remember') ? document.getElementById('login-remember').checked : false;
-    
-    await login(email, password, remember);
+async function handleLogin(form) {
+    const formData = new FormData(form);
+    const credentials = {
+        username_or_email: formData.get('username_or_email'),
+        password: formData.get('password'),
+        remember: formData.get('remember') === 'on'
+    };
+
+    await auth.login(credentials);
 }
 
-async function handleSignup(e) {
-    e.preventDefault();
-    const username = document.getElementById('signup-username').value;
-    const email = document.getElementById('signup-email').value;
-    const password = document.getElementById('signup-password').value;
-    const passwordConfirm = document.getElementById('signup-confirm-password').value;
-    
-    if (password !== passwordConfirm) {
-        showMessage('رمز عبور و تکرار آن مطابقت ندارند', 'error');
-        return;
-    }
-    
-    await signup(username, email, password, passwordConfirm);
+async function handleSignup(form) {
+    const formData = new FormData(form);
+    const userData = {
+        username: formData.get('username'),
+        email: formData.get('email'),
+        password: formData.get('password'),
+        password_confirm: formData.get('password_confirm')
+    };
+
+    await auth.signup(userData);
 }
 
-async function handleForgotPassword(e) {
-    e.preventDefault();
-    const email = document.getElementById('reset-email').value;
-    
-    if (!email) {
-        showMessage('لطفا ایمیل خود را وارد کنید', 'error');
-        return;
-    }
-    
-    await requestPasswordReset(email);
+async function handleCreatePost(form) {
+    const formData = new FormData(form);
+    const postData = {
+        content: formData.get('content'),
+        category: formData.get('category'),
+        tags: formData.get('tags'),
+        mentions: formData.get('mentions'),
+        media: formData.getAll('media')
+    };
+
+    await posts.createPost(postData);
 }
 
-async function handleResetPassword(e) {
-    e.preventDefault();
-    
-    const password = document.getElementById('new-password').value;
-    const passwordConfirm = document.getElementById('confirm-password').value;
-    const token = document.getElementById('reset-password-form').dataset.token;
-    
-    if (!token) {
-        showMessage('لینک بازیابی معتبر نیست', 'error');
-        return;
-    }
-    
-    if (password !== passwordConfirm) {
-        showMessage('رمز عبور و تکرار آن مطابقت ندارند', 'error');
-        return;
-    }
-    
-    if (password.length < 8) {
-        showMessage('رمز عبور باید حداقل ۸ کاراکتر باشد', 'error');
-        return;
-    }
-    
-    await resetPassword(token, password, passwordConfirm);
-}
+async function handleUpdateProfile(form) {
+    const formData = new FormData(form);
+    const profileData = {
+        first_name: formData.get('first_name'),
+        last_name: formData.get('last_name'),
+        student_id: formData.get('student_id'),
+        bio: formData.get('bio')
+    };
 
-async function handleCreatePost(e) {
-    e.preventDefault();
-    
-    const content = document.getElementById('post-content').value;
-    const category = document.getElementById('post-category').value;
-    const tags = document.getElementById('post-tags').value;
-    const mentions = document.getElementById('post-mentions').value;
-    const mediaInput = document.getElementById('post-media');
-    
-    if (!content.trim() && (!mediaInput.files || mediaInput.files.length === 0)) {
-        showMessage('لطفا محتوا یا فایل رسانه‌ای وارد کنید', 'error');
-        return;
-    }
-    
-    if (!category.trim()) {
-        showMessage('نام اتاق الزامی است', 'error');
-        return;
-    }
-    
-    const formData = new FormData();
-    formData.append('content', content);
-    formData.append('category', category);
-    formData.append('tags', tags);
-    formData.append('mentions', mentions);
-    
-    if (mediaInput.files) {
-        for (let file of mediaInput.files) {
-            formData.append('media', file);
-        }
-    }
-    
-    const success = await createPost(formData);
+    const { success, data } = await apiCall('/profile/update/', {
+        method: 'POST',
+        body: JSON.stringify(profileData)
+    });
+
     if (success) {
-        showPage('home');
-    }
-}
-
-function handleRoomSearch(e) {
-    e.preventDefault();
-    const roomName = document.getElementById('room-name').value.trim();
-    if (roomName) {
-        showRoom(roomName);
+        showMessage('پروفایل با موفقیت به‌روزرسانی شد!');
+        auth.currentUser = data.user;
+        auth.updateUI();
     } else {
-        showMessage('لطفا نام اتاق را وارد کنید', 'error');
+        showMessage(data.message || 'خطا در به‌روزرسانی پروفایل', 'error');
     }
 }
 
-function handleUserSearch(e) {
-    e.preventDefault();
-    const username = document.getElementById('search-username').value.trim();
-    if (username) {
-        searchUsers(username);
-    } else {
-        showMessage('لطفا نام کاربری را وارد کنید', 'error');
-    }
-}
-
-// Global functions for HTML onclick
-window.showPage = showPage;
-window.loadPageContent = loadPageContent;
-window.showUserProfile = loadUserProfile;
-window.showUserPosts = showUserPosts;
-window.showRoom = showRoom;
-window.logout = logout;
-window.likePost = likePost;
-window.showPostDetail = showPostDetail;
-window.searchUsers = searchUsers;
+// Initialize app
+document.addEventListener('DOMContentLoaded', function() {
+    auth.checkAuth();
+});
