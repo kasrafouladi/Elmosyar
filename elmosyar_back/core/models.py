@@ -22,17 +22,19 @@ class User(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # فیچرهای جدید: سیستم فالو
+    # فیچرهای جدید: سیستم فالو - با through table مشخص
     followers = models.ManyToManyField(
         'self', 
         symmetrical=False, 
         related_name='following', 
-        blank=True
+        blank=True,
+        through='UserFollow'
     )
 
     class Meta:
         verbose_name = 'User'
         verbose_name_plural = 'Users'
+        db_table = 'core_user'
 
     def __str__(self):
         return self.username
@@ -73,31 +75,47 @@ class User(AbstractUser):
     def follow(self, user):
         """فالو کردن کاربر دیگر"""
         if user != self and not self.following.filter(id=user.id).exists():
-            self.following.add(user)
+            UserFollow.objects.create(follower=self, following=user)
             return True
         return False
 
     def unfollow(self, user):
         """آنفالو کردن کاربر"""
-        if self.following.filter(id=user.id).exists():
-            self.following.remove(user)
+        try:
+            follow_relation = UserFollow.objects.get(follower=self, following=user)
+            follow_relation.delete()
             return True
-        return False
+        except UserFollow.DoesNotExist:
+            return False
 
     @property
     def followers_count(self):
         """تعداد فالوورها"""
-        return self.followers.count()
+        return UserFollow.objects.filter(following=self).count()
 
     @property
     def following_count(self):
         """تعداد افرادی که کاربر فالو کرده"""
-        return self.following.count()
+        return UserFollow.objects.filter(follower=self).count()
 
     @property
     def posts_count(self):
         """تعداد پست‌های کاربر"""
         return self.posts.count()
+
+
+# مدل واسط برای رابطه فالو
+class UserFollow(models.Model):
+    follower = models.ForeignKey(User, on_delete=models.CASCADE, related_name='follow_relations')
+    following = models.ForeignKey(User, on_delete=models.CASCADE, related_name='follower_relations')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('follower', 'following')
+        db_table = 'core_user_followers'
+
+    def __str__(self):
+        return f"{self.follower} follows {self.following}"
 
 
 class Post(models.Model):
@@ -123,6 +141,7 @@ class Post(models.Model):
             models.Index(fields=['category', 'created_at']),
             models.Index(fields=['author', 'created_at']),
         ]
+        db_table = 'core_post'
 
     def __str__(self):
         return f"Post by {self.author} at {self.created_at}"[:50]
@@ -167,6 +186,7 @@ class PostMedia(models.Model):
 
     class Meta:
         ordering = ['order', 'created_at']
+        db_table = 'core_postmedia'
 
     def __str__(self):
         return f"Media for post {self.post_id} ({self.media_type})"
@@ -198,6 +218,7 @@ class Reaction(models.Model):
         indexes = [
             models.Index(fields=['post', 'reaction']),
         ]
+        db_table = 'core_reaction'
 
     def __str__(self):
         return f"{self.user.username} {self.reaction} on {self.post_id}"
@@ -215,6 +236,7 @@ class Comment(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        db_table = 'core_comment'
 
     def __str__(self):
         return f"Comment by {self.user} on {self.post_id}"
@@ -251,6 +273,7 @@ class Notification(models.Model):
         indexes = [
             models.Index(fields=['recipient', 'is_read', 'created_at']),
         ]
+        db_table = 'core_notification'
 
     def __str__(self):
         return f"{self.notif_type} for {self.recipient}"
@@ -269,6 +292,7 @@ class Conversation(models.Model):
 
     class Meta:
         ordering = ['-updated_at']
+        db_table = 'core_conversation'
 
     def __str__(self):
         return f"Conversation {self.id}"
@@ -289,6 +313,7 @@ class Message(models.Model):
         indexes = [
             models.Index(fields=['conversation', 'is_read', 'created_at']),
         ]
+        db_table = 'core_message'
 
     def __str__(self):
         return f"Message from {self.sender} in {self.conversation.id}"
