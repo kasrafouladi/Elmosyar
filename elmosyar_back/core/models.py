@@ -160,9 +160,6 @@ class Post(models.Model):
         return self.comments.count()
 
     def save(self, *args, **kwargs):
-        """ذخیره پست با اعتبارسنجی"""
-        if self.parent and self.parent.parent:
-            raise ValueError("Cannot reply to a reply")
         super().save(*args, **kwargs)
 
 
@@ -201,10 +198,6 @@ class Reaction(models.Model):
     REACTION_CHOICES = [
         ("like", "Like"),
         ("dislike", "Dislike"),
-        ("love", "Love"),
-        ("laugh", "Laugh"),
-        ("sad", "Sad"),
-        ("angry", "Angry"),
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='reactions')

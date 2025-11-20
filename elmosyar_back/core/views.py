@@ -6,8 +6,9 @@ from django.contrib.auth import authenticate, login, logout
 from django.core.mail import send_mail
 from django.utils import timezone
 from django.conf import settings
-from django.db.models import Q, Count
+from django.db.models import Q, Count, F
 from django.core.paginator import Paginator
+from django.db import transaction
 import json
 from datetime import timedelta
 import mimetypes
@@ -19,14 +20,20 @@ from .models import User, Post, PostMedia, Comment, Notification, Reaction, Conv
 # 🔧 Helper Functions
 # ════════════════════════════════════════════════════════════
 
+
 def serialize_user(user, include_sensitive=False, current_user=None):
     """سریالایز کردن اطلاعات کاربر"""
+    try:
+        profile_picture_url = user.profile_picture.url if user.profile_picture else None
+    except:
+        profile_picture_url = None
+    
     data = {
         'id': user.id,
         'username': user.username,
         'first_name': user.first_name,
         'last_name': user.last_name,
-        'profile_picture': user.profile_picture.url if user.profile_picture else None,
+        'profile_picture': profile_picture_url,
         'bio': user.bio,
         'student_id': user.student_id,
         'followers_count': user.followers_count,
@@ -51,14 +58,20 @@ def serialize_user(user, include_sensitive=False, current_user=None):
 
 def serialize_post(post, include_user_info=True, current_user=None):
     """سریالایز کردن اطلاعات پست"""
+    # پیش‌بارگذاری مدیاها
     media_list = []
-    for m in post.media.all():
+    for m in post.media.all().only('id', 'file', 'media_type', 'caption'):
         media_list.append({
             'id': m.id,
             'url': m.file.url if m.file else '',
             'type': m.media_type,
             'caption': m.caption,
         })
+    
+    # پیش‌بارگذاری منشن‌ها
+    mentions_list = []
+    for u in post.mentions.all().only('id', 'username', 'first_name', 'last_name', 'profile_picture'):
+        mentions_list.append(serialize_user(u))
     
     data = {
         'id': post.id,
@@ -67,7 +80,7 @@ def serialize_post(post, include_user_info=True, current_user=None):
         'created_at': post.created_at.isoformat(),
         'updated_at': post.updated_at.isoformat(),
         'tags': [t.strip() for t in post.tags.split(',')] if post.tags else [],
-        'mentions': [serialize_user(u) for u in post.mentions.all()],
+        'mentions': mentions_list,
         'media': media_list,
         'likes_count': post.likes_count,
         'dislikes_count': post.dislikes_count,
@@ -83,7 +96,7 @@ def serialize_post(post, include_user_info=True, current_user=None):
     if include_user_info:
         data['author_info'] = serialize_user(post.author, include_sensitive=False, current_user=current_user)
     
-    # اضافه کردن وضعیت ری‌اکشن کاربر جاری
+    # اضافه کردن وضعیت ری‌اکشن کاربر جاری با بررسی وجود
     if current_user and current_user.is_authenticated:
         user_reaction = post.reactions.filter(user=current_user).first()
         data['user_reaction'] = user_reaction.reaction if user_reaction else None
@@ -229,75 +242,82 @@ def index(request):
 def signup(request):
     """Register a new user"""
     try:
-        data = json.loads(request.body)
-        username = data.get('username', '').strip()
-        email = data.get('email', '').strip()
-        password = data.get('password', '')
-        password_confirm = data.get('password_confirm', '')
+        with transaction.atomic():
+            data = json.loads(request.body)
+            username = data.get('username', '').strip()
+            email = data.get('email', '').strip()
+            password = data.get('password', '')
+            password_confirm = data.get('password_confirm', '')
 
-        # Validation
-        if not all([username, email, password, password_confirm]):
-            return JsonResponse({
-                'success': False,
-                'message': 'All fields are required'
-            }, status=400)
+            # Validation
+            if not all([username, email, password, password_confirm]):
+                return JsonResponse({
+                    'success': False,
+                    'message': 'All fields are required'
+                }, status=400)
 
-        if password != password_confirm:
-            return JsonResponse({
-                'success': False,
-                'message': 'Passwords do not match'
-            }, status=400)
+            if len(username) < 3 or len(username) > 30:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Username must be between 3 and 30 characters'
+                }, status=400)
 
-        if len(password) < 8:
-            return JsonResponse({
-                'success': False,
-                'message': 'Password must be at least 8 characters'
-            }, status=400)
+            if password != password_confirm:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Passwords do not match'
+                }, status=400)
 
-        if User.objects.filter(username=username).exists():
-            return JsonResponse({
-                'success': False,
-                'message': 'Username already exists'
-            }, status=400)
+            if len(password) < 8:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Password must be at least 8 characters'
+                }, status=400)
 
-        if User.objects.filter(email=email).exists():
-            return JsonResponse({
-                'success': False,
-                'message': 'Email already exists'
-            }, status=400)
+            if User.objects.filter(username=username).exists():
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Username already exists'
+                }, status=400)
 
-        # Create user
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password,
-            is_active=False
-        )
+            if User.objects.filter(email=email).exists():
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Email already exists'
+                }, status=400)
 
-        # Send verification email
-        verification_token = user.generate_email_verification_token()
-        user.email_verification_sent_at = timezone.now()
-        user.save()
-
-        host = request.scheme + '://' + request.get_host()
-        verification_link = f"{host}/api/verify-email/{verification_token}/"
-        
-        try:
-            send_mail(
-                'Email Verification',
-                f'Click this link to verify your email: {verification_link}',
-                settings.DEFAULT_FROM_EMAIL or 'noreply@example.com',
-                [user.email],
-                fail_silently=False,
+            # Create user
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                is_active=False
             )
-        except Exception as e:
-            print(f"Email sending failed: {e}")
 
-        return JsonResponse({
-            'success': True,
-            'message': 'Signup successful. Please check your email to verify your account.',
-            'user': serialize_user(user, include_sensitive=True)
-        }, status=201)
+            # Send verification email
+            verification_token = user.generate_email_verification_token()
+            user.email_verification_sent_at = timezone.now()
+            user.save()
+
+            host = request.scheme + '://' + request.get_host()
+            verification_link = f"{host}/api/verify-email/{verification_token}/"
+            
+            try:
+                send_mail(
+                    'Email Verification',
+                    f'Click this link to verify your email: {verification_link}',
+                    settings.DEFAULT_FROM_EMAIL or 'noreply@example.com',
+                    [user.email],
+                    fail_silently=False,
+                )
+            except Exception as e:
+                print(f"Email sending failed: {e}")
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Signup successful. Please check your email to verify your account.',
+                'user': serialize_user(user, include_sensitive=True)
+            }, status=201)
 
     except json.JSONDecodeError:
         return JsonResponse({
@@ -316,26 +336,36 @@ def signup(request):
 def verify_email(request, token):
     """Verify user email"""
     try:
-        user = get_object_or_404(User, email_verification_token=token)
-        
-        if not user.is_email_verification_token_valid():
+        with transaction.atomic():
+            user = get_object_or_404(User, email_verification_token=token)
+            
+            if user.is_email_verified:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Email is already verified'
+                }, status=400)
+            
+            if not user.is_email_verification_token_valid():
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Verification token has expired'
+                }, status=400)
+            
+            user.verify_email()
+            user.is_active = True
+            user.save()
+            
+            # لاگین کردن کاربر بعد از تأیید ایمیل
+            try:
+                login(request, user)
+            except Exception:
+                pass  # اگر لاگین شکست خورد، ادامه بده
+            
             return JsonResponse({
-                'success': False,
-                'message': 'Verification token has expired'
-            }, status=400)
-        
-        user.verify_email()
-        user.is_active = True
-        user.save()
-        
-        # لاگین کردن کاربر بعد از تأیید ایمیل
-        login(request, user)
-        
-        return JsonResponse({
-            'success': True,
-            'message': 'Email verified successfully. You are now logged in.',
-            'user': serialize_user(user, include_sensitive=True)
-        })
+                'success': True,
+                'message': 'Email verified successfully. You are now logged in.',
+                'user': serialize_user(user, include_sensitive=True)
+            })
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -447,9 +477,10 @@ def request_password_reset(request):
             except Exception as e:
                 print(f"Email sending failed: {e}")
 
+        # همیشه همین پیام را برگردان، حتی اگر ایمیل وجود نداشته باشد
         return JsonResponse({
             'success': True,
-            'message': 'If this email exists, a password reset link has been sent'
+            'message': 'If this email exists in our system, a password reset link has been sent'
         })
 
     except json.JSONDecodeError:
@@ -469,46 +500,47 @@ def request_password_reset(request):
 def reset_password(request, token):
     """Reset password with token"""
     try:
-        user = get_object_or_404(User, password_reset_token=token)
+        with transaction.atomic():
+            user = get_object_or_404(User, password_reset_token=token)
 
-        token_age = timezone.now() - user.password_reset_sent_at
-        if token_age > timedelta(hours=1):
+            token_age = timezone.now() - user.password_reset_sent_at
+            if token_age > timedelta(hours=1):
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Password reset token has expired'
+                }, status=400)
+
+            data = json.loads(request.body)
+            password = data.get('password', '')
+            password_confirm = data.get('password_confirm', '')
+
+            if not all([password, password_confirm]):
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Password and confirmation are required'
+                }, status=400)
+
+            if password != password_confirm:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Passwords do not match'
+                }, status=400)
+
+            if len(password) < 8:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Password must be at least 8 characters'
+                }, status=400)
+
+            user.set_password(password)
+            user.password_reset_token = None
+            user.password_reset_sent_at = None
+            user.save()
+
             return JsonResponse({
-                'success': False,
-                'message': 'Password reset token has expired'
-            }, status=400)
-
-        data = json.loads(request.body)
-        password = data.get('password', '')
-        password_confirm = data.get('password_confirm', '')
-
-        if not all([password, password_confirm]):
-            return JsonResponse({
-                'success': False,
-                'message': 'Password and confirmation are required'
-            }, status=400)
-
-        if password != password_confirm:
-            return JsonResponse({
-                'success': False,
-                'message': 'Passwords do not match'
-            }, status=400)
-
-        if len(password) < 8:
-            return JsonResponse({
-                'success': False,
-                'message': 'Password must be at least 8 characters'
-            }, status=400)
-
-        user.set_password(password)
-        user.password_reset_token = None
-        user.password_reset_sent_at = None
-        user.save()
-
-        return JsonResponse({
-            'success': True,
-            'message': 'Password reset successfully. You can now login.'
-        })
+                'success': True,
+                'message': 'Password reset successfully. You can now login.'
+            })
 
     except Exception as e:
         return JsonResponse({
@@ -561,28 +593,78 @@ def update_profile(request):
         }, status=401)
 
     try:
-        data = json.loads(request.body)
-        user = request.user
+        with transaction.atomic():
+            data = json.loads(request.body)
+            user = request.user
 
-        # Update allowed fields
-        allowed_fields = ['first_name', 'last_name', 'student_id', 'bio']
-        for field in allowed_fields:
-            if field in data:
-                setattr(user, field, data[field])
+            # Update allowed fields with validation
+            allowed_fields = {
+                'first_name': {'max_length': 150},
+                'last_name': {'max_length': 150},
+                'student_id': {'max_length': 20},
+                'bio': {'max_length': 500}
+            }
+            
+            for field, constraints in allowed_fields.items():
+                if field in data:
+                    value = data[field]
+                    if len(str(value)) > constraints['max_length']:
+                        return JsonResponse({
+                            'success': False,
+                            'message': f'{field} is too long (max {constraints["max_length"]} characters)'
+                        }, status=400)
+                    setattr(user, field, value)
 
-        user.save()
+            user.save()
 
-        return JsonResponse({
-            'success': True,
-            'message': 'Profile updated successfully',
-            'user': serialize_user(user, include_sensitive=True, current_user=request.user)
-        })
+            return JsonResponse({
+                'success': True,
+                'message': 'Profile updated successfully',
+                'user': serialize_user(user, include_sensitive=True, current_user=request.user)
+            })
 
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
             'message': 'Invalid JSON'
         }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE", "POST"])
+def delete_profile_picture(request):
+    """Delete profile picture"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'User not authenticated'
+        }, status=401)
+
+    try:
+        with transaction.atomic():
+            user = request.user
+
+            if not user.profile_picture:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'No profile picture to delete'
+                }, status=400)
+
+            # Delete old picture
+            user.profile_picture.delete(save=False)
+            user.profile_picture = None
+            user.save()
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Profile picture deleted successfully'
+            })
+
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -601,6 +683,7 @@ def update_profile_picture(request):
         }, status=401)
 
     try:
+        # ابتدا فایل جدید را اعتبارسنجی می‌کنیم
         if 'profile_picture' not in request.FILES:
             return JsonResponse({
                 'success': False,
@@ -610,19 +693,46 @@ def update_profile_picture(request):
         profile_picture = request.FILES['profile_picture']
         user = request.user
 
-        # Delete old picture
-        if user.profile_picture:
-            if user.profile_picture.name:
-                user.profile_picture.delete(save=False)
+        # بررسی نوع فایل
+        if not profile_picture.content_type.startswith('image/'):
+            return JsonResponse({
+                'success': False,
+                'message': 'Only image files are allowed'
+            }, status=400)
 
-        user.profile_picture = profile_picture
-        user.save()
+        # بررسی سایز فایل (حداکثر 5MB)
+        if profile_picture.size > 5 * 1024 * 1024:
+            return JsonResponse({
+                'success': False,
+                'message': 'Image file is too large (max 5MB)'
+            }, status=400)
 
-        return JsonResponse({
-            'success': True,
-            'message': 'Profile picture updated successfully',
-            'profile_picture': user.profile_picture.url if user.profile_picture else None
-        })
+        with transaction.atomic():
+            # ذخیره مسیر فایل قدیمی برای پشتیبان‌گیری
+            old_picture_path = user.profile_picture.path if user.profile_picture else None
+            
+            try:
+                user.profile_picture = profile_picture
+                user.save()
+                
+                # اگر آپلود موفق بود، فایل قدیمی را حذف کن
+                if old_picture_path:
+                    import os
+                    if os.path.isfile(old_picture_path):
+                        os.remove(old_picture_path)
+                        
+            except Exception:
+                # اگر خطا رخ داد، تغییرات را rollback کن
+                if old_picture_path and user.profile_picture:
+                    user.profile_picture = old_picture_path
+                    user.save()
+                raise
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Profile picture updated successfully',
+                'profile_picture': user.profile_picture.url if user.profile_picture else None
+            })
 
     except Exception as e:
         return JsonResponse({
@@ -645,33 +755,54 @@ def follow_user(request, username):
             'message': 'Authentication required'
         }, status=401)
     
-    user_to_follow = get_object_or_404(User, username=username)
-    
-    if user_to_follow == request.user:
+    try:
+        with transaction.atomic():
+            user_to_follow = get_object_or_404(User, username=username)
+            
+            if user_to_follow == request.user:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'You cannot follow yourself'
+                }, status=400)
+            
+            if request.user.following.filter(id=user_to_follow.id).exists():
+                return JsonResponse({
+                    'success': False,
+                    'message': f'You are already following {username}'
+                }, status=400)
+            
+            # استفاده از F() برای جلوگیری از race condition
+            User.objects.filter(id=request.user.id).update(
+                following_count=F('following_count') + 1
+            )
+            User.objects.filter(id=user_to_follow.id).update(
+                followers_count=F('followers_count') + 1
+            )
+            
+            request.user.following.add(user_to_follow)
+            
+            # ایجاد نوتیفیکیشن
+            Notification.objects.create(
+                recipient=user_to_follow,
+                sender=request.user,
+                notif_type='follow',
+                message=f'{request.user.username} started following you'
+            )
+            
+            # بازخوانی کاربر برای گرفتن مقادیر به‌روز شده
+            user_to_follow.refresh_from_db()
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'You are now following {username}',
+                'followers_count': user_to_follow.followers_count
+            })
+            
+    except Exception as e:
         return JsonResponse({
             'success': False,
-            'message': 'You cannot follow yourself'
-        }, status=400)
-    
-    if request.user.follow(user_to_follow):
-        # ایجاد نوتیفیکیشن
-        Notification.objects.create(
-            recipient=user_to_follow,
-            sender=request.user,
-            notif_type='follow',
-            message=f'{request.user.username} started following you'
-        )
-        
-        return JsonResponse({
-            'success': True,
-            'message': f'You are now following {username}',
-            'followers_count': user_to_follow.followers_count
-        })
-    else:
-        return JsonResponse({
-            'success': False,
-            'message': f'You are already following {username}'
-        }, status=400)
+            'message': str(e)
+        }, status=500)
 
 
 @csrf_exempt
@@ -684,31 +815,69 @@ def unfollow_user(request, username):
             'message': 'Authentication required'
         }, status=401)
     
-    user_to_unfollow = get_object_or_404(User, username=username)
-    
-    if request.user.unfollow(user_to_unfollow):
-        return JsonResponse({
-            'success': True,
-            'message': f'You have unfollowed {username}',
-            'followers_count': user_to_unfollow.followers_count
-        })
-    else:
+    try:
+        with transaction.atomic():
+            user_to_unfollow = get_object_or_404(User, username=username)
+            
+            if not request.user.following.filter(id=user_to_unfollow.id).exists():
+                return JsonResponse({
+                    'success': False,
+                    'message': f'You are not following {username}'
+                }, status=400)
+            
+            # استفاده از F() برای جلوگیری از race condition
+            User.objects.filter(id=request.user.id).update(
+                following_count=F('following_count') - 1
+            )
+            User.objects.filter(id=user_to_unfollow.id).update(
+                followers_count=F('followers_count') - 1
+            )
+            
+            request.user.following.remove(user_to_unfollow)
+            
+            # بازخوانی کاربر برای گرفتن مقادیر به‌روز شده
+            user_to_unfollow.refresh_from_db()
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'You have unfollowed {username}',
+                'followers_count': user_to_unfollow.followers_count
+            })
+            
+    except Exception as e:
         return JsonResponse({
             'success': False,
-            'message': f'You are not following {username}'
-        }, status=400)
+            'message': str(e)
+        }, status=500)
 
 
 @require_http_methods(["GET"])
 def user_followers(request, username):
     """Get user's followers"""
     user = get_object_or_404(User, username=username)
+    
+    page = int(request.GET.get('page', 1))
+    per_page = min(int(request.GET.get('per_page', 50)), 100)
+    
     followers = user.followers.all()
+    paginator = Paginator(followers, per_page)
+    
+    try:
+        followers_page = paginator.page(page)
+    except:
+        followers_page = paginator.page(1)
     
     return JsonResponse({
         'success': True,
-        'followers': [serialize_user(f, current_user=request.user) for f in followers],
-        'count': len(followers)
+        'followers': [serialize_user(f, current_user=request.user) for f in followers_page],
+        'pagination': {
+            'page': page,
+            'per_page': per_page,
+            'total_pages': paginator.num_pages,
+            'total_count': paginator.count,
+            'has_next': followers_page.has_next(),
+            'has_previous': followers_page.has_previous(),
+        }
     })
 
 
@@ -716,12 +885,29 @@ def user_followers(request, username):
 def user_following(request, username):
     """Get users that this user is following"""
     user = get_object_or_404(User, username=username)
+    
+    page = int(request.GET.get('page', 1))
+    per_page = min(int(request.GET.get('per_page', 50)), 100)
+    
     following = user.following.all()
+    paginator = Paginator(following, per_page)
+    
+    try:
+        following_page = paginator.page(page)
+    except:
+        following_page = paginator.page(1)
     
     return JsonResponse({
         'success': True,
-        'following': [serialize_user(f, current_user=request.user) for f in following],
-        'count': len(following)
+        'following': [serialize_user(f, current_user=request.user) for f in following_page],
+        'pagination': {
+            'page': page,
+            'per_page': per_page,
+            'total_pages': paginator.num_pages,
+            'total_count': paginator.count,
+            'has_next': following_page.has_next(),
+            'has_previous': following_page.has_previous(),
+        }
     })
 
 
@@ -738,8 +924,8 @@ def posts_list_create(request):
         # پارامترهای جستجو
         category = request.GET.get('category')
         username = request.GET.get('username')
-        limit = int(request.GET.get('limit', 20))
-        offset = int(request.GET.get('offset', 0))
+        page = int(request.GET.get('page', 1))
+        per_page = min(int(request.GET.get('per_page', 20)), 100)  # حداکثر 100 پست در صفحه
         
         # ساخت کوئری
         query = Post.objects.filter(parent=None)
@@ -753,13 +939,26 @@ def posts_list_create(request):
         
         posts = query.select_related('author').prefetch_related(
             'media', 'mentions', 'reactions'
-        ).order_by('-created_at')[offset:offset + limit]
+        ).order_by('-created_at')
+        
+        # Pagination
+        paginator = Paginator(posts, per_page)
+        try:
+            posts_page = paginator.page(page)
+        except:
+            posts_page = paginator.page(1)
         
         return JsonResponse({
             'success': True,
-            'posts': [serialize_post(p, include_user_info=True, current_user=request.user) for p in posts],
-            'count': len(posts),
-            'has_more': len(posts) == limit
+            'posts': [serialize_post(p, include_user_info=True, current_user=request.user) for p in posts_page],
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total_pages': paginator.num_pages,
+                'total_count': paginator.count,
+                'has_next': posts_page.has_next(),
+                'has_previous': posts_page.has_previous(),
+            }
         })
     
     # POST - ایجاد پست جدید
@@ -770,69 +969,89 @@ def posts_list_create(request):
         }, status=401)
 
     try:
-        content = request.POST.get('content', '').strip()
-        tags = request.POST.get('tags', '').strip()
-        mentions_raw = request.POST.get('mentions', '').strip()
-        parent_id = request.POST.get('parent')
-        category = request.POST.get('category', '').strip()
+        with transaction.atomic():
+            content = request.POST.get('content', '').strip()
+            tags = request.POST.get('tags', '').strip()
+            mentions_raw = request.POST.get('mentions', '').strip()
+            parent_id = request.POST.get('parent')
+            category = request.POST.get('category', '').strip()
 
-        if not content and not request.FILES:
+            # اعتبارسنجی
+            if not content and not request.FILES:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Post content or media required'
+                }, status=400)
+
+            if len(content) > 5000:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Post content is too long (max 5000 characters)'
+                }, status=400)
+
+            if len(tags) > 4096:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Tags are too long'
+                }, status=400)
+
+            # دسته‌بندی برای پست‌های اصلی الزامی است
+            if not parent_id and not category:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Room/Category is required'
+                }, status=400)
+
+            parent = None
+            if parent_id:
+                parent = Post.objects.filter(id=parent_id).first()
+
+            post = Post.objects.create(
+                author=request.user,
+                content=content,
+                tags=tags,
+                parent=parent,
+                category=category
+            )
+
+            # مدیریت منشن‌ها
+            if mentions_raw:
+                usernames = [u.strip() for u in mentions_raw.split(',') if u.strip()]
+                mentioned_users = User.objects.filter(username__in=usernames)
+                for mu in mentioned_users:
+                    post.mentions.add(mu)
+                    if mu != request.user:
+                        Notification.objects.create(
+                            recipient=mu,
+                            sender=request.user,
+                            notif_type='mention',
+                            post=post,
+                            message=f'{request.user.username} mentioned you in a post'
+                        )
+
+            # مدیریت فایل‌های مدیا
+            for f in request.FILES.getlist('media'):
+                # اعتبارسنجی نوع فایل
+                ctype = f.content_type or mimetypes.guess_type(f.name)[0] or ''
+                if ctype.startswith('image/'):
+                    mtype = 'image'
+                elif ctype.startswith('video/'):
+                    mtype = 'video'
+                elif ctype.startswith('audio/'):
+                    mtype = 'audio'
+                else:
+                    mtype = 'file'
+                
+                # اعتبارسنجی سایز فایل (حداکثر 10MB)
+                if f.size > 10 * 1024 * 1024:
+                    continue  # فایل‌های بزرگ را نادیده بگیر
+                    
+                PostMedia.objects.create(post=post, file=f, media_type=mtype)
+
             return JsonResponse({
-                'success': False,
-                'message': 'Post content or media required'
-            }, status=400)
-
-        # دسته‌بندی برای پست‌های اصلی الزامی است
-        if not parent_id and not category:
-            return JsonResponse({
-                'success': False,
-                'message': 'Room/Category is required'
-            }, status=400)
-
-        parent = None
-        if parent_id:
-            parent = Post.objects.filter(id=parent_id).first()
-
-        post = Post.objects.create(
-            author=request.user,
-            content=content,
-            tags=tags,
-            parent=parent,
-            category=category
-        )
-
-        # مدیریت منشن‌ها
-        if mentions_raw:
-            usernames = [u.strip() for u in mentions_raw.split(',') if u.strip()]
-            mentioned_users = User.objects.filter(username__in=usernames)
-            for mu in mentioned_users:
-                post.mentions.add(mu)
-                if mu != request.user:
-                    Notification.objects.create(
-                        recipient=mu,
-                        sender=request.user,
-                        notif_type='mention',
-                        post=post,
-                        message=f'{request.user.username} mentioned you in a post'
-                    )
-
-        # مدیریت فایل‌های مدیا
-        for f in request.FILES.getlist('media'):
-            ctype = f.content_type or mimetypes.guess_type(f.name)[0] or ''
-            if ctype.startswith('image/'):
-                mtype = 'image'
-            elif ctype.startswith('video/'):
-                mtype = 'video'
-            elif ctype.startswith('audio/'):
-                mtype = 'audio'
-            else:
-                mtype = 'file'
-            PostMedia.objects.create(post=post, file=f, media_type=mtype)
-
-        return JsonResponse({
-            'success': True,
-            'post': serialize_post(post, include_user_info=True, current_user=request.user)
-        }, status=201)
+                'success': True,
+                'post': serialize_post(post, include_user_info=True, current_user=request.user)
+            }, status=201)
 
     except Exception as e:
         return JsonResponse({
@@ -873,44 +1092,61 @@ def post_like(request, post_id):
             'message': 'Authentication required'
         }, status=401)
     
-    post = get_object_or_404(Post, id=post_id)
-    r = Reaction.objects.filter(user=request.user, post=post).first()
-    
-    if r and r.reaction == 'like':
-        # Unlike
-        r.delete()
-        likes_count = post.reactions.filter(reaction='like').count()
+    try:
+        with transaction.atomic():
+            post = get_object_or_404(Post, id=post_id)
+            
+            if post.author == request.user:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'You cannot like your own post'
+                }, status=400)
+            
+            r = Reaction.objects.filter(user=request.user, post=post).first()
+            
+            if r and r.reaction == 'like':
+                # Unlike
+                r.delete()
+                likes_count = post.reactions.filter(reaction='like').count()
+                dislikes_count = post.reactions.filter(reaction='dislike').count()
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Unliked',
+                    'likes_count': likes_count,
+                    'dislikes_count': dislikes_count,
+                    'user_reaction': None
+                })
+            else:
+                # Like - حذف reaction قبلی اگر وجود دارد
+                if r:
+                    r.delete()
+                
+                Reaction.objects.create(user=request.user, post=post, reaction='like')
+                
+                # ایجاد نوتیفیکیشن
+                if post.author != request.user:
+                    Notification.objects.create(
+                        recipient=post.author,
+                        sender=request.user,
+                        notif_type='like',
+                        post=post,
+                        message=f'{request.user.username} liked your post'
+                    )
+                
+                likes_count = post.reactions.filter(reaction='like').count()
+                dislikes_count = post.reactions.filter(reaction='dislike').count()
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Liked',
+                    'likes_count': likes_count,
+                    'dislikes_count': dislikes_count,
+                    'user_reaction': 'like'
+                })
+    except Exception as e:
         return JsonResponse({
-            'success': True,
-            'message': 'Unliked',
-            'likes_count': likes_count,
-            'user_reaction': None
-        })
-    else:
-        # Like
-        if r:
-            r.reaction = 'like'
-            r.save()
-        else:
-            Reaction.objects.create(user=request.user, post=post, reaction='like')
-        
-        if post.author != request.user:
-            Notification.objects.create(
-                recipient=post.author,
-                sender=request.user,
-                notif_type='like',
-                post=post,
-                message=f'{request.user.username} liked your post'
-            )
-        
-        likes_count = post.reactions.filter(reaction='like').count()
-        return JsonResponse({
-            'success': True,
-            'message': 'Liked',
-            'likes_count': likes_count,
-            'user_reaction': 'like'
-        })
-
+            'success': False,
+            'message': str(e)
+        }, status=500)
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -922,34 +1158,51 @@ def post_dislike(request, post_id):
             'message': 'Authentication required'
         }, status=401)
     
-    post = get_object_or_404(Post, id=post_id)
-    r = Reaction.objects.filter(user=request.user, post=post).first()
-    
-    if r and r.reaction == 'dislike':
-        # Remove dislike
-        r.delete()
-        dislikes_count = post.reactions.filter(reaction='dislike').count()
+    try:
+        with transaction.atomic():
+            post = get_object_or_404(Post, id=post_id)
+            
+            if post.author == request.user:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'You cannot dislike your own post'
+                }, status=400)
+            
+            r = Reaction.objects.filter(user=request.user, post=post).first()
+            
+            if r and r.reaction == 'dislike':
+                # Remove dislike
+                r.delete()
+                likes_count = post.reactions.filter(reaction='like').count()
+                dislikes_count = post.reactions.filter(reaction='dislike').count()
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Removed dislike',
+                    'likes_count': likes_count,
+                    'dislikes_count': dislikes_count,
+                    'user_reaction': None
+                })
+            else:
+                # Dislike - حذف reaction قبلی اگر وجود دارد
+                if r:
+                    r.delete()
+                
+                Reaction.objects.create(user=request.user, post=post, reaction='dislike')
+                
+                likes_count = post.reactions.filter(reaction='like').count()
+                dislikes_count = post.reactions.filter(reaction='dislike').count()
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Disliked',
+                    'likes_count': likes_count,
+                    'dislikes_count': dislikes_count,
+                    'user_reaction': 'dislike'
+                })
+    except Exception as e:
         return JsonResponse({
-            'success': True,
-            'message': 'Removed dislike',
-            'dislikes_count': dislikes_count,
-            'user_reaction': None
-        })
-    else:
-        # Dislike
-        if r:
-            r.reaction = 'dislike'
-            r.save()
-        else:
-            Reaction.objects.create(user=request.user, post=post, reaction='dislike')
-        
-        dislikes_count = post.reactions.filter(reaction='dislike').count()
-        return JsonResponse({
-            'success': True,
-            'message': 'Disliked',
-            'dislikes_count': dislikes_count,
-            'user_reaction': 'dislike'
-        })
+            'success': False,
+            'message': str(e)
+        }, status=500)
 
 
 @csrf_exempt
@@ -962,63 +1215,159 @@ def post_comment(request, post_id):
             'message': 'Authentication required'
         }, status=401)
     
-    post = get_object_or_404(Post, id=post_id)
+    try:
+        with transaction.atomic():
+            post = get_object_or_404(Post, id=post_id)
+            
+            try:
+                data = json.loads(request.body)
+            except Exception:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Invalid JSON'
+                }, status=400)
+            
+            content = data.get('content', '').strip()
+            parent_id = data.get('parent')
+            
+            if not content:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Comment content required'
+                }, status=400)
+            
+            parent = None
+            if parent_id:
+                parent = Comment.objects.filter(id=parent_id, post=post).first()
+            
+            comment = Comment.objects.create(
+                user=request.user,
+                post=post,
+                content=content,
+                parent=parent
+            )
+            
+            # ایجاد نوتیفیکیشن
+            if post.author != request.user:
+                Notification.objects.create(
+                    recipient=post.author,
+                    sender=request.user,
+                    notif_type='comment',
+                    post=post,
+                    comment=comment,
+                    message=f'{request.user.username} commented on your post'
+                )
+            
+            # اگر کامنت پاسخ به کامنت دیگری است
+            if parent and parent.user != request.user:
+                Notification.objects.create(
+                    recipient=parent.user,
+                    sender=request.user,
+                    notif_type='reply',
+                    post=post,
+                    comment=comment,
+                    message=f'{request.user.username} replied to your comment'
+                )
+            
+            return JsonResponse({
+                'success': True,
+                'comment': serialize_comment(comment, current_user=request.user),
+                'comments_count': post.comments.count()
+            })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE", "POST"])
+def delete_post(request, post_id):
+    """Delete a post"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'Authentication required'
+        }, status=401)
     
     try:
-        data = json.loads(request.body)
-    except Exception:
+        with transaction.atomic():
+            post = get_object_or_404(Post, id=post_id)
+            
+            if post.author != request.user:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'You can only delete your own posts'
+                }, status=403)
+            
+            post.delete()
+            return JsonResponse({
+                'success': True,
+                'message': 'Post deleted successfully'
+            })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["PUT", "PATCH", "POST"])
+def update_post(request, post_id):
+    """Update a post"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'Authentication required'
+        }, status=401)
+    
+    try:
+        with transaction.atomic():
+            post = get_object_or_404(Post, id=post_id)
+            
+            if post.author != request.user:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'You can only edit your own posts'
+                }, status=403)
+            
+            data = json.loads(request.body) if request.body else {}
+            
+            # فقط فیلدهای قابل ویرایش
+            updatable_fields = ['content', 'tags', 'category']
+            updated = False
+            
+            for field in updatable_fields:
+                if field in data:
+                    if field == 'content' and len(data[field]) > 5000:
+                        return JsonResponse({
+                            'success': False,
+                            'message': 'Content is too long (max 5000 characters)'
+                        }, status=400)
+                    
+                    setattr(post, field, data[field])
+                    updated = True
+            
+            if updated:
+                post.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Post updated successfully',
+                'post': serialize_post(post, include_user_info=True, current_user=request.user)
+            })
+    except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
             'message': 'Invalid JSON'
         }, status=400)
-    
-    content = data.get('content', '').strip()
-    parent_id = data.get('parent')
-    
-    if not content:
+    except Exception as e:
         return JsonResponse({
             'success': False,
-            'message': 'Comment content required'
-        }, status=400)
-    
-    parent = None
-    if parent_id:
-        parent = Comment.objects.filter(id=parent_id, post=post).first()
-    
-    comment = Comment.objects.create(
-        user=request.user,
-        post=post,
-        content=content,
-        parent=parent
-    )
-    
-    # ایجاد نوتیفیکیشن
-    if post.author != request.user:
-        Notification.objects.create(
-            recipient=post.author,
-            sender=request.user,
-            notif_type='comment',
-            post=post,
-            comment=comment,
-            message=f'{request.user.username} commented on your post'
-        )
-    
-    # اگر کامنت پاسخ به کامنت دیگری است
-    if parent and parent.user != request.user:
-        Notification.objects.create(
-            recipient=parent.user,
-            sender=request.user,
-            notif_type='reply',
-            post=post,
-            comment=comment,
-            message=f'{request.user.username} replied to your comment'
-        )
-    
-    return JsonResponse({
-        'success': True,
-        'comment': serialize_comment(comment, current_user=request.user),
-        'comments_count': post.comments.count()
-    })
+            'message': str(e)
+        }, status=500)
 
 
 @csrf_exempt
@@ -1031,36 +1380,50 @@ def post_repost(request, post_id):
             'message': 'Authentication required'
         }, status=401)
     
-    post = get_object_or_404(Post, id=post_id)
-    
-    new_post = Post.objects.create(
-        author=request.user,
-        content=post.content,
-        is_repost=True,
-        original_post=post,
-        tags=post.tags,
-        category=post.category
-    )
-    
-    for mu in post.mentions.all():
-        new_post.mentions.add(mu)
-    
-    for m in post.media.all():
-        PostMedia.objects.create(post=new_post, file=m.file, media_type=m.media_type)
-    
-    if post.author != request.user:
-        Notification.objects.create(
-            recipient=post.author,
-            sender=request.user,
-            notif_type='repost',
-            post=post,
-            message=f'{request.user.username} reposted your post'
-        )
-    
-    return JsonResponse({
-        'success': True,
-        'post': serialize_post(new_post, include_user_info=True, current_user=request.user)
-    })
+    try:
+        with transaction.atomic():
+            post = get_object_or_404(Post, id=post_id)
+            
+            # بررسی اینکه کاربر پست خودش را repost نکند
+            if post.author == request.user:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'You cannot repost your own post'
+                }, status=400)
+            
+            new_post = Post.objects.create(
+                author=request.user,
+                content=post.content,
+                is_repost=True,
+                original_post=post,
+                tags=post.tags,
+                category=post.category
+            )
+            
+            for mu in post.mentions.all():
+                new_post.mentions.add(mu)
+            
+            for m in post.media.all():
+                PostMedia.objects.create(post=new_post, file=m.file, media_type=m.media_type)
+            
+            # ایجاد نوتیفیکیشن
+            Notification.objects.create(
+                recipient=post.author,
+                sender=request.user,
+                notif_type='repost',
+                post=post,
+                message=f'{request.user.username} reposted your post'
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'post': serialize_post(new_post, include_user_info=True, current_user=request.user)
+            })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
 
 
 @require_http_methods(["GET"])
@@ -1131,20 +1494,27 @@ def save_post(request, post_id):
             'message': 'Authentication required'
         }, status=401)
     
-    post = get_object_or_404(Post, id=post_id)
-    
-    if post.saved_by.filter(id=request.user.id).exists():
+    try:
+        with transaction.atomic():
+            post = get_object_or_404(Post, id=post_id)
+            
+            if post.saved_by.filter(id=request.user.id).exists():
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Post already saved'
+                }, status=400)
+            
+            post.saved_by.add(request.user)
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Post saved successfully'
+            })
+    except Exception as e:
         return JsonResponse({
             'success': False,
-            'message': 'Post already saved'
-        }, status=400)
-    
-    post.saved_by.add(request.user)
-    
-    return JsonResponse({
-        'success': True,
-        'message': 'Post saved successfully'
-    })
+            'message': str(e)
+        }, status=500)
 
 
 @csrf_exempt
@@ -1157,20 +1527,27 @@ def unsave_post(request, post_id):
             'message': 'Authentication required'
         }, status=401)
     
-    post = get_object_or_404(Post, id=post_id)
-    
-    if not post.saved_by.filter(id=request.user.id).exists():
+    try:
+        with transaction.atomic():
+            post = get_object_or_404(Post, id=post_id)
+            
+            if not post.saved_by.filter(id=request.user.id).exists():
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Post not saved'
+                }, status=400)
+            
+            post.saved_by.remove(request.user)
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Post unsaved successfully'
+            })
+    except Exception as e:
         return JsonResponse({
             'success': False,
-            'message': 'Post not saved'
-        }, status=400)
-    
-    post.saved_by.remove(request.user)
-    
-    return JsonResponse({
-        'success': True,
-        'message': 'Post unsaved successfully'
-    })
+            'message': str(e)
+        }, status=500)
 
 
 @require_http_methods(["GET"])
@@ -1201,22 +1578,121 @@ def like_comment(request, comment_id):
             'message': 'Authentication required'
         }, status=401)
     
-    comment = get_object_or_404(Comment, id=comment_id)
-    
-    if comment.likes.filter(id=request.user.id).exists():
-        comment.likes.remove(request.user)
-        action = 'unliked'
-    else:
-        comment.likes.add(request.user)
-        action = 'liked'
-    
-    return JsonResponse({
-        'success': True,
-        'message': f'Comment {action}',
-        'likes_count': comment.likes_count,
-        'is_liked': comment.likes.filter(id=request.user.id).exists()
-    })
+    try:
+        with transaction.atomic():
+            comment = get_object_or_404(Comment, id=comment_id)
+            
+            if comment.user == request.user:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'You cannot like your own comment'
+                }, status=400)
+            
+            if comment.likes.filter(id=request.user.id).exists():
+                comment.likes.remove(request.user)
+                action = 'unliked'
+            else:
+                comment.likes.add(request.user)
+                action = 'liked'
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Comment {action}',
+                'likes_count': comment.likes_count,
+                'is_liked': comment.likes.filter(id=request.user.id).exists()
+            })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
 
+
+@csrf_exempt
+@require_http_methods(["DELETE", "POST"])
+def delete_comment(request, comment_id):
+    """Delete a comment"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'Authentication required'
+        }, status=401)
+    
+    try:
+        with transaction.atomic():
+            comment = get_object_or_404(Comment, id=comment_id)
+            
+            if comment.user != request.user:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'You can only delete your own comments'
+                }, status=403)
+            
+            comment.delete()
+            return JsonResponse({
+                'success': True,
+                'message': 'Comment deleted successfully'
+            })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["PUT", "PATCH", "POST"])
+def update_comment(request, comment_id):
+    """Update a comment"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'Authentication required'
+        }, status=401)
+    
+    try:
+        with transaction.atomic():
+            comment = get_object_or_404(Comment, id=comment_id)
+            
+            if comment.user != request.user:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'You can only edit your own comments'
+                }, status=403)
+            
+            data = json.loads(request.body)
+            content = data.get('content', '').strip()
+            
+            if not content:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Comment content is required'
+                }, status=400)
+            
+            if len(content) > 1000:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Comment is too long (max 1000 characters)'
+                }, status=400)
+            
+            comment.content = content
+            comment.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Comment updated successfully',
+                'comment': serialize_comment(comment, current_user=request.user)
+            })
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
 
 # ════════════════════════════════════════════════════════════
 # 🔔 Notification Endpoints
@@ -1310,26 +1786,33 @@ def start_conversation(request, username):
             'message': 'Authentication required'
         }, status=401)
     
-    other_user = get_object_or_404(User, username=username)
-    
-    if other_user == request.user:
+    try:
+        with transaction.atomic():
+            other_user = get_object_or_404(User, username=username)
+            
+            if other_user == request.user:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Cannot start conversation with yourself'
+                }, status=400)
+            
+            # بررسی وجود مکالمه قبلی
+            conversation = Conversation.objects.filter(participants=request.user).filter(participants=other_user).first()
+            
+            if not conversation:
+                conversation = Conversation.objects.create()
+                conversation.participants.add(request.user, other_user)
+            
+            return JsonResponse({
+                'success': True,
+                'conversation_id': conversation.id,
+                'message': 'Conversation started successfully'
+            })
+    except Exception as e:
         return JsonResponse({
             'success': False,
-            'message': 'Cannot start conversation with yourself'
-        }, status=400)
-    
-    # بررسی وجود مکالمه قبلی
-    conversation = Conversation.objects.filter(participants=request.user).filter(participants=other_user).first()
-    
-    if not conversation:
-        conversation = Conversation.objects.create()
-        conversation.participants.add(request.user, other_user)
-    
-    return JsonResponse({
-        'success': True,
-        'conversation_id': conversation.id,
-        'message': 'Conversation started successfully'
-    })
+            'message': str(e)
+        }, status=500)
 
 
 @require_http_methods(["GET"])
@@ -1366,37 +1849,123 @@ def send_message(request, conversation_id):
             'message': 'Authentication required'
         }, status=401)
     
-    conversation = get_object_or_404(Conversation, id=conversation_id, participants=request.user)
+    try:
+        with transaction.atomic():
+            conversation = get_object_or_404(Conversation, id=conversation_id, participants=request.user)
+            
+            data = request.POST
+            content = data.get('content', '').strip()
+            image = request.FILES.get('image')
+            file = request.FILES.get('file')
+            
+            if not content and not image and not file:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Message content or file is required'
+                }, status=400)
+            
+            message = Message.objects.create(
+                conversation=conversation,
+                sender=request.user,
+                content=content,
+                image=image,
+                file=file
+            )
+            
+            # آپدیت زمان مکالمه
+            conversation.updated_at = timezone.now()
+            conversation.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': serialize_message(message)
+            }, status=201)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+    
+@csrf_exempt
+@require_http_methods(["DELETE", "POST"])
+def delete_message(request, message_id):
+    """Delete a message"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'Authentication required'
+        }, status=401)
     
     try:
-        data = request.POST
-        content = data.get('content', '').strip()
-        image = request.FILES.get('image')
-        file = request.FILES.get('file')
-        
-        if not content and not image and not file:
+        with transaction.atomic():
+            message = get_object_or_404(Message, id=message_id)
+            
+            if message.sender != request.user:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'You can only delete your own messages'
+                }, status=403)
+            
+            message.delete()
             return JsonResponse({
-                'success': False,
-                'message': 'Message content or file is required'
-            }, status=400)
-        
-        message = Message.objects.create(
-            conversation=conversation,
-            sender=request.user,
-            content=content,
-            image=image,
-            file=file
-        )
-        
-        # آپدیت زمان مکالمه
-        conversation.updated_at = timezone.now()
-        conversation.save()
-        
+                'success': True,
+                'message': 'Message deleted successfully'
+            })
+    except Exception as e:
         return JsonResponse({
-            'success': True,
-            'message': serialize_message(message)
-        }, status=201)
-        
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["PUT", "PATCH", "POST"])
+def update_message(request, message_id):
+    """Update a message"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'Authentication required'
+        }, status=401)
+    
+    try:
+        with transaction.atomic():
+            message = get_object_or_404(Message, id=message_id)
+            
+            if message.sender != request.user:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'You can only edit your own messages'
+                }, status=403)
+            
+            data = json.loads(request.body)
+            content = data.get('content', '').strip()
+            
+            if not content:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Message content is required'
+                }, status=400)
+            
+            if len(content) > 2000:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Message is too long (max 2000 characters)'
+                }, status=400)
+            
+            message.content = content
+            message.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Message updated successfully',
+                'message_data': serialize_message(message)
+            })
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid JSON'
+        }, status=400)
     except Exception as e:
         return JsonResponse({
             'success': False,
