@@ -5,3 +5,5 @@
 #elmosyar_back/.env
 #elmosyar_back/venv/
 #*.log
+*/core/new*
+elmosyar_front

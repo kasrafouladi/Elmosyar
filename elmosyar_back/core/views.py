@@ -16,6 +16,8 @@ import mimetypes
 from .models import User, Post, PostMedia, Comment, Notification, Reaction, Conversation, Message
 
 
+AUTH_URL = "http://89.106.206.119:3000" #it is also front's url
+
 # ════════════════════════════════════════════════════════════
 # 🔧 Helper Functions
 # ════════════════════════════════════════════════════════════
@@ -299,8 +301,7 @@ def signup(request):
             user.email_verification_sent_at = timezone.now()
             user.save()
 
-            host = request.scheme + '://' + request.get_host()
-            verification_link = f"{host}/api/verify-email/{verification_token}/"
+            verification_link = f"{AUTH_URL}/verify-email/{verification_token}/"
             
             try:
                 send_mail(
@@ -463,8 +464,7 @@ def request_password_reset(request):
             user.password_reset_sent_at = timezone.now()
             user.save()
 
-            host = request.scheme + '://' + request.get_host()
-            reset_link = f"{host}/api/password-reset/{reset_token}/"
+            reset_link = f"{AUTH_URL}/password-reset/{reset_token}/"
             
             try:
                 send_mail(
