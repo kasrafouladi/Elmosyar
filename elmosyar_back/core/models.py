@@ -102,6 +102,10 @@ class User(AbstractUser):
         """تعداد پست‌های کاربر"""
         return self.posts.count()
 
+    @property
+    def is_verified(self):
+        return self.is_email_verified
+
 
 class UserFollow(models.Model):
     follower = models.ForeignKey(User, on_delete=models.CASCADE, related_name='follow_relations')
