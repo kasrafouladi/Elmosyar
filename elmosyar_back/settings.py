@@ -175,6 +175,11 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'None' if DEBUG else 'Lax'
 SESSION_COOKIE_SECURE = False
 
+# Session Configuration
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_AGE = 1209600  # 2 weeks
+SESSION_SAVE_EVERY_REQUEST = True
+
 # CSRF settings for cross-origin API
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = 'None' if DEBUG else 'Lax'
