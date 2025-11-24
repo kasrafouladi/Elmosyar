@@ -33,6 +33,12 @@ MAX_POST_CONTENT_LENGTH = 5000
 MAX_COMMENT_CONTENT_LENGTH = 1000
 MAX_MESSAGE_CONTENT_LENGTH = 2000
 
+logging.basicConfig(
+    filename='./server.log',
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
 logger = logging.getLogger(__name__)
 
 # ════════════════════════════════════════════════════════════
