@@ -8,7 +8,7 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 import logging
 
-from accounts.models import User
+import settings
 from .models import Conversation, Message
 from .serializers import ConversationSerializer, MessageSerializer
 
@@ -44,7 +44,7 @@ def start_conversation(request, username):
     """Start a new conversation"""
     try:
         with transaction.atomic():
-            other_user = get_object_or_404(User, username=username)
+            other_user = get_object_or_404(settings.AUTH_USER_MODEL, username=username)
             
             if other_user == request.user:
                 return Response({

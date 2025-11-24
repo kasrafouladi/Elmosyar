@@ -9,6 +9,7 @@ from django.utils import timezone
 
 
 class User(AbstractUser):
+
     email = models.EmailField(unique=True)
     student_id = models.CharField(max_length=20, blank=True, null=True)
     bio = models.TextField(max_length=500, blank=True, null=True)
@@ -34,7 +35,7 @@ class User(AbstractUser):
     class Meta:
         verbose_name = 'User'
         verbose_name_plural = 'Users'
-        db_table = 'core_user'
+        db_table = 'user'
 
     def __str__(self):
         return self.username
@@ -74,6 +75,7 @@ class User(AbstractUser):
 
     def follow(self, user):
         """فالو کردن کاربر دیگر"""
+        from social.models import UserFollow
         if user != self and not self.following.filter(id=user.id).exists():
             UserFollow.objects.create(follower=self, following=user)
             return True
@@ -81,6 +83,7 @@ class User(AbstractUser):
 
     def unfollow(self, user):
         """آنفالو کردن کاربر"""
+        from social.models import UserFollow
         try:
             follow_relation = UserFollow.objects.get(follower=self, following=user)
             follow_relation.delete()

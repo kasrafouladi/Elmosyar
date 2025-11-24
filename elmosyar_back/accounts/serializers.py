@@ -17,6 +17,7 @@ class ResendVerificationSerializer(serializers.Serializer):
         return value
 
 class UserSerializer(serializers.ModelSerializer):
+
     followers_count = serializers.ReadOnlyField()
     following_count = serializers.ReadOnlyField()
     posts_count = serializers.ReadOnlyField()
@@ -37,6 +38,7 @@ class UserSerializer(serializers.ModelSerializer):
         }
 
     def get_is_following(self, obj):
+        from social.models import UserFollow
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return UserFollow.objects.filter(follower=request.user, following=obj).exists()

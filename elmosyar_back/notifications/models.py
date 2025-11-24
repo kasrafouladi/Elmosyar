@@ -3,6 +3,7 @@ from django.conf import settings
 from posts.models import Post
 from interactions.models import Comment
 
+import settings
 
 class Notification(models.Model):
     NOTIF_TYPE_CHOICES = [
@@ -13,8 +14,8 @@ class Notification(models.Model):
         ('follow', 'Follow'),
         ('reply', 'Reply'),
     ]
-    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
-    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_notifications')
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_notifications')
     notif_type = models.CharField(max_length=20, choices=NOTIF_TYPE_CHOICES)
     post = models.ForeignKey(Post, null=True, blank=True, on_delete=models.CASCADE)
     comment = models.ForeignKey(Comment, null=True, blank=True, on_delete=models.CASCADE)
@@ -27,7 +28,7 @@ class Notification(models.Model):
         indexes = [
             models.Index(fields=['recipient', 'is_read', 'created_at']),
         ]
-        db_table = 'core_notification'
+        db_table = 'notification'
 
     def __str__(self):
         return f"{self.notif_type} for {self.recipient}"

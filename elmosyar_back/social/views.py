@@ -8,10 +8,12 @@ from django.db.models import F
 from django.core.paginator import Paginator
 import logging
 
-from accounts.models import User
+
 from accounts.serializers import UserSerializer
 from .models import UserFollow
 from notifications.models import Notification
+
+import settings
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,7 @@ def follow_user(request, username):
     """Follow a user"""
     try:
         with transaction.atomic():
-            user_to_follow = get_object_or_404(User, username=username)
+            user_to_follow = get_object_or_404(settings.AUTH_USER_MODEL, username=username)
             
             if user_to_follow == request.user:
                 return Response({
@@ -43,10 +45,10 @@ def follow_user(request, username):
             UserFollow.objects.create(follower=request.user, following=user_to_follow)
             
             # Update counts using F() to prevent race condition
-            User.objects.filter(id=request.user.id).update(
+            settings.AUTH_USER_MODEL.objects.filter(id=request.user.id).update(
                 following_count=F('following_count') + 1
             )
-            User.objects.filter(id=user_to_follow.id).update(
+            settings.AUTH_USER_MODEL.objects.filter(id=user_to_follow.id).update(
                 followers_count=F('followers_count') + 1
             )
             
@@ -81,7 +83,7 @@ def unfollow_user(request, username):
     """Unfollow a user"""
     try:
         with transaction.atomic():
-            user_to_unfollow = get_object_or_404(User, username=username)
+            user_to_unfollow = get_object_or_404(settings.AUTH_USER_MODEL, username=username)
             
             follow_relation = UserFollow.objects.filter(
                 follower=request.user, 
@@ -97,10 +99,10 @@ def unfollow_user(request, username):
             follow_relation.delete()
             
             # Update counts using F() to prevent race condition
-            User.objects.filter(id=request.user.id).update(
+            settings.AUTH_USER_MODEL.objects.filter(id=request.user.id).update(
                 following_count=F('following_count') - 1
             )
-            User.objects.filter(id=user_to_unfollow.id).update(
+            settings.AUTH_USER_MODEL.objects.filter(id=user_to_unfollow.id).update(
                 followers_count=F('followers_count') - 1
             )
             
@@ -125,7 +127,7 @@ def unfollow_user(request, username):
 @permission_classes([AllowAny])
 def user_followers(request, username):
     """Get user's followers with pagination"""
-    user = get_object_or_404(User, username=username)
+    user = get_object_or_404(settings.AUTH_USER_MODEL, username=username)
     
     page = int(request.GET.get('page', 1))
     per_page = min(int(request.GET.get('per_page', 50)), 100)
@@ -160,7 +162,7 @@ def user_followers(request, username):
 @permission_classes([AllowAny])
 def user_following(request, username):
     """Get users that this user is following with pagination"""
-    user = get_object_or_404(User, username=username)
+    user = get_object_or_404(settings.AUTH_USER_MODEL, username=username)
     
     page = int(request.GET.get('page', 1))
     per_page = min(int(request.GET.get('per_page', 50)), 100)

@@ -1,3 +1,11 @@
+from django.contrib import admin
+from django.utils.html import format_html
+from .models import Post, PostMedia
+
+from django.contrib import admin
+from django.utils.html import format_html
+
+
 # =====================================================
 # Post Admin
 # =====================================================
@@ -83,4 +91,3 @@ class PostMediaAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
-

@@ -11,6 +11,8 @@ from .models import Reaction, Comment
 from .serializers import CommentSerializer
 from notifications.models import Notification
 
+import settings
+
 logger = logging.getLogger(__name__)
 
 MAX_COMMENT_CONTENT_LENGTH = 1000

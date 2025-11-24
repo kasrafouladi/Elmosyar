@@ -8,10 +8,14 @@ from django.core.paginator import Paginator
 import logging
 import mimetypes
 
-from accounts.models import User
+import settings
 from .models import Post, PostMedia
 from .serializers import PostSerializer, PostMediaSerializer
 from notifications.models import Notification
+
+from interactions.models import Comment
+from interactions.serializers import CommentSerializer
+from accounts.serializers import UserSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +46,7 @@ def posts_list_create(request):
             posts = posts.filter(category=category)
         
         if username:
-            user = get_object_or_404(User, username=username)
+            user = get_object_or_404(settings.AUTH_USER_MODEL, username=username)
             posts = posts.filter(author=user)
         
         # Optimize queries
@@ -116,7 +120,7 @@ def posts_list_create(request):
             # Handle mentions
             if mentions_raw:
                 usernames = [u.strip() for u in mentions_raw.split(',') if u.strip()]
-                mentioned_users = User.objects.filter(username__in=usernames)
+                mentioned_users = settings.AUTH_USER_MODEL.objects.filter(username__in=usernames)
                 for mu in mentioned_users:
                     post.mentions.add(mu)
                     if mu != request.user:
@@ -364,7 +368,7 @@ def posts_by_category(request, category_id):
 @permission_classes([AllowAny])
 def user_posts(request, username):
     """Get posts by specific user with pagination"""
-    user = get_object_or_404(User, username=username)
+    user = get_object_or_404(settings.AUTH_USER_MODEL, username=username)
     
     page = int(request.GET.get('page', 1))
     per_page = min(int(request.GET.get('per_page', 20)), 100)
