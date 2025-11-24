@@ -93,11 +93,13 @@ class User(AbstractUser):
 
     @property
     def followers_count(self):
+        from social.models import UserFollow
         """تعداد فالوورها"""
         return UserFollow.objects.filter(following=self).count()
 
     @property
     def following_count(self):
+        from social.models import UserFollow
         """تعداد افرادی که کاربر فالو کرده"""
         return UserFollow.objects.filter(follower=self).count()
 
