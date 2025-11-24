@@ -29,7 +29,7 @@ class User(AbstractUser):
         symmetrical=False, 
         related_name='following', 
         blank=True,
-        through='UserFollow'
+        through='social.UserFollow'
     )
 
     class Meta:
