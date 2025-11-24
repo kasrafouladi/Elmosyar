@@ -15,9 +15,7 @@ curl -X POST http://89.106.206.119:8000/api/signup/ \
     "username": "johndoe",
     "email": "john@example.com",
     "password": "securepassword123",
-    "password2": "securepassword123",
-    "first_name": "John",
-    "last_name": "Doe"
+    "password2": "securepassword123"
   }'
 ```
 
@@ -30,15 +28,16 @@ curl -X POST http://89.106.206.119:8000/api/signup/ \
     "id": 1,
     "username": "johndoe",
     "email": "john@example.com",
-    "first_name": "John",
-    "last_name": "Doe",
+    "first_name": "",
+    "last_name": "",
     "profile_picture": null,
-    "bio": "",
-    "website": "",
+    "bio": null,
+    "student_id": null,
+    "is_email_verified": false,
     "followers_count": 0,
     "following_count": 0,
-    "is_email_verified": false,
-    "date_joined": "2024-01-15T10:30:00Z"
+    "posts_count": 0,
+    "created_at": "2024-01-15T10:30:00Z"
   }
 }
 ```
@@ -63,15 +62,16 @@ curl -X POST http://89.106.206.119:8000/api/login/ \
     "id": 1,
     "username": "johndoe",
     "email": "john@example.com",
-    "first_name": "John",
-    "last_name": "Doe",
+    "first_name": "",
+    "last_name": "",
     "profile_picture": null,
-    "bio": "",
-    "website": "",
+    "bio": null,
+    "student_id": null,
+    "is_email_verified": true,
     "followers_count": 5,
     "following_count": 3,
-    "is_email_verified": true,
-    "date_joined": "2024-01-15T10:30:00Z"
+    "posts_count": 12,
+    "created_at": "2024-01-15T10:30:00Z"
   },
   "tokens": {
     "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
@@ -79,6 +79,26 @@ curl -X POST http://89.106.206.119:8000/api/login/ \
   }
 }
 ```
+
+
+### Logout
+```bash
+curl -X POST http://89.106.206.119:8000/api/logout/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Logout successful"
+}
+```
+
 
 ### Verify Token
 ```bash
@@ -115,7 +135,6 @@ curl -X POST http://89.106.206.119:8000/api/token/refresh/ \
 ```
 
 ### Email Verification
-
 ```bash
 curl http://89.106.206.119:8000/api/verify-email/0c0ce97e-48b4-4ef9-822a-71361f8ea018/
 ```
@@ -124,21 +143,25 @@ curl http://89.106.206.119:8000/api/verify-email/0c0ce97e-48b4-4ef9-822a-71361f8
 ```json
 {
   "success": true,
-  "message": "Email verified successfully. You are now logged in.",
+  "message": "Email verified successfully",
   "user": {
-    "id": 2,
+    "id": 1,
     "username": "johndoe",
+    "email": "john@example.com",
     "first_name": "",
     "last_name": "",
     "profile_picture": null,
     "bio": null,
     "student_id": null,
+    "is_email_verified": true,
     "followers_count": 0,
     "following_count": 0,
     "posts_count": 0,
-    "email": "john@example.com",
-    "is_email_verified": true,
-    "created_at": "2025-11-22T18:17:15.335568+00:00"
+    "created_at": "2024-01-15T10:30:00Z"
+  },
+  "tokens": {
+    "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+    "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
   }
 }
 ```
@@ -177,6 +200,24 @@ curl -X POST http://89.106.206.119:8000/api/password-reset/request/ \
 }
 ```
 
+### Reset Password
+```bash
+curl -X POST http://89.106.206.119:8000/api/password-reset/0c0ce97e-48b4-4ef9-822a-71361f8ea018/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "password": "newsecurepassword123",
+    "password_confirm": "newsecurepassword123"
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Password reset successfully. You can now login."
+}
+```
+
 ## 👤 Profile Endpoints
 
 ### Get Current User Profile
@@ -195,20 +236,23 @@ curl -X GET http://89.106.206.119:8000/api/profile/ \
     "email": "john@example.com",
     "first_name": "John",
     "last_name": "Doe",
-    "profile_picture": "/media/profile_pictures/john.jpg",
+    "profile_picture": "/media/profiles/john.jpg",
     "bio": "Software developer and tech enthusiast",
-    "website": "https://johndoe.com",
+    "student_id": "12345",
+    "is_email_verified": true,
     "followers_count": 15,
     "following_count": 8,
-    "is_email_verified": true,
-    "date_joined": "2024-01-15T10:30:00Z"
+    "posts_count": 25,
+    "is_following": false,
+    "is_me": true,
+    "created_at": "2024-01-15T10:30:00Z"
   }
 }
 ```
 
 ### Get User Public Profile
 ```bash
-curl -X GET http://89.106.206.119:8000/api/users/johndoe/profile/
+curl -X GET http://89.106.206.119:8000/api/users/janedoe/profile/
 ```
 
 **Response:**
@@ -216,16 +260,20 @@ curl -X GET http://89.106.206.119:8000/api/users/johndoe/profile/
 {
   "success": true,
   "user": {
-    "id": 1,
-    "username": "johndoe",
-    "first_name": "John",
+    "id": 2,
+    "username": "janedoe",
+    "first_name": "Jane",
     "last_name": "Doe",
-    "profile_picture": "/media/profile_pictures/john.jpg",
-    "bio": "Software developer and tech enthusiast",
-    "website": "https://johndoe.com",
-    "followers_count": 15,
-    "following_count": 8,
-    "date_joined": "2024-01-15T10:30:00Z"
+    "profile_picture": "/media/profiles/jane.jpg",
+    "bio": "Digital artist and designer",
+    "student_id": null,
+    "is_email_verified": true,
+    "followers_count": 120,
+    "following_count": 45,
+    "posts_count": 67,
+    "is_following": true,
+    "is_me": false,
+    "created_at": "2024-01-10T08:15:00Z"
   }
 }
 ```
@@ -236,8 +284,10 @@ curl -X PUT http://89.106.206.119:8000/api/profile/update/ \
   -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
   -H "Content-Type: application/json" \
   -d '{
+    "first_name": "John",
+    "last_name": "Smith",
     "bio": "Senior software engineer at Tech Corp",
-    "website": "https://john-doe-portfolio.com"
+    "student_id": "12345"
   }'
 ```
 
@@ -251,23 +301,57 @@ curl -X PUT http://89.106.206.119:8000/api/profile/update/ \
     "username": "johndoe",
     "email": "john@example.com",
     "first_name": "John",
-    "last_name": "Doe",
-    "profile_picture": "/media/profile_pictures/john.jpg",
+    "last_name": "Smith",
+    "profile_picture": "/media/profiles/john.jpg",
     "bio": "Senior software engineer at Tech Corp",
-    "website": "https://john-doe-portfolio.com",
+    "student_id": "12345",
+    "is_email_verified": true,
     "followers_count": 15,
     "following_count": 8,
-    "is_email_verified": true,
-    "date_joined": "2024-01-15T10:30:00Z"
+    "posts_count": 25,
+    "is_following": false,
+    "is_me": true,
+    "created_at": "2024-01-15T10:30:00Z"
   }
+}
+```
+
+### Update Profile Picture
+```bash
+curl -X POST http://89.106.206.119:8000/api/profile/update-picture/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
+  -F "profile_picture=@/path/to/new_photo.jpg"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Profile picture updated successfully",
+  "profile_picture": "/media/profiles/new_photo.jpg"
+}
+```
+
+### Delete Profile Picture
+```bash
+curl -X DELETE http://89.106.206.119:8000/api/profile/delete-picture/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Profile picture deleted successfully"
 }
 ```
 
 ## 📝 Post Endpoints
 
-### Get Posts
+### Get Posts (with pagination and filters)
 ```bash
-curl -X GET "http://89.106.206.119:8000/api/posts/?page=1&per_page=10&category=tech"
+curl -X GET "http://89.106.206.119:8000/api/posts/?page=1&per_page=10&category=tech&username=johndoe" \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
 ```
 
 **Response:**
@@ -277,29 +361,44 @@ curl -X GET "http://89.106.206.119:8000/api/posts/?page=1&per_page=10&category=t
   "posts": [
     {
       "id": 1,
-      "author": {
+      "author": 1,
+      "author_info": {
         "id": 1,
         "username": "johndoe",
-        "profile_picture": "/media/profile_pictures/john.jpg"
+        "first_name": "John",
+        "last_name": "Doe",
+        "profile_picture": "/media/profiles/john.jpg",
+        "is_email_verified": true,
+        "followers_count": 15,
+        "following_count": 8,
+        "posts_count": 25
       },
       "content": "Just launched my new project! 🚀",
-      "category": "tech",
+      "created_at": "2024-01-15T14:30:00Z",
+      "updated_at": "2024-01-15T14:30:00Z",
       "tags": "django,react,webdev",
+      "mentions": [],
       "media": [
         {
           "id": 1,
-          "file": "/media/posts/project_screenshot.jpg",
-          "media_type": "image"
+          "url": "/media/posts/images/project_screenshot.jpg",
+          "media_type": "image",
+          "caption": "Project screenshot",
+          "order": 0,
+          "file_size": 2048576
         }
       ],
+      "category": "tech",
+      "parent": null,
+      "is_repost": false,
+      "original_post": null,
       "likes_count": 25,
       "dislikes_count": 2,
       "comments_count": 8,
       "reposts_count": 3,
+      "replies_count": 0,
       "user_reaction": "like",
-      "is_saved": false,
-      "created_at": "2024-01-15T14:30:00Z",
-      "updated_at": "2024-01-15T14:30:00Z"
+      "is_saved": false
     }
   ],
   "pagination": {
@@ -313,405 +412,6 @@ curl -X GET "http://89.106.206.119:8000/api/posts/?page=1&per_page=10&category=t
 }
 ```
 
-### Create Post
-```bash
-curl -X POST http://89.106.206.119:8000/api/posts/ \
-  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
-  -F "content=Check out this amazing sunset! 🌅" \
-  -F "category=photography" \
-  -F "tags=sunset,nature" \
-  -F "media=@/path/to/sunset.jpg"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "post": {
-    "id": 2,
-    "author": {
-      "id": 1,
-      "username": "johndoe",
-      "profile_picture": "/media/profile_pictures/john.jpg"
-    },
-    "content": "Check out this amazing sunset! 🌅",
-    "category": "photography",
-    "tags": "sunset,nature",
-    "media": [
-      {
-        "id": 2,
-        "file": "/media/posts/sunset.jpg",
-        "media_type": "image"
-      }
-    ],
-    "likes_count": 0,
-    "dislikes_count": 0,
-    "comments_count": 0,
-    "reposts_count": 0,
-    "user_reaction": null,
-    "is_saved": false,
-    "created_at": "2024-01-15T15:45:00Z",
-    "updated_at": "2024-01-15T15:45:00Z"
-  }
-}
-```
-
-### Like Post
-```bash
-curl -X POST http://89.106.206.119:8000/api/posts/1/like/ \
-  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Liked",
-  "likes_count": 26,
-  "dislikes_count": 2,
-  "user_reaction": "like"
-}
-```
-
-### Comment on Post
-```bash
-curl -X POST http://89.106.206.119:8000/api/posts/1/comment/ \
-  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
-  -H "Content-Type: application/json" \
-  -d '{
-    "content": "Great work! This looks amazing! 👏"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "comment": {
-    "id": 1,
-    "user": {
-      "id": 2,
-      "username": "janedoe",
-      "profile_picture": "/media/profile_pictures/jane.jpg"
-    },
-    "content": "Great work! This looks amazing! 👏",
-    "likes_count": 0,
-    "is_liked": false,
-    "created_at": "2024-01-15T16:00:00Z"
-  },
-  "comments_count": 9
-}
-```
-
-## 🤝 Social Endpoints
-
-### Follow User
-```bash
-curl -X POST http://89.106.206.119:8000/api/users/janedoe/follow/ \
-  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "You are now following janedoe",
-  "followers_count": 16
-}
-```
-
-### Get User Followers
-```bash
-curl -X GET "http://89.106.206.119:8000/api/users/johndoe/followers/?page=1&per_page=10"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "followers": [
-    {
-      "id": 2,
-      "username": "janedoe",
-      "profile_picture": "/media/profile_pictures/jane.jpg",
-      "bio": "Digital artist and designer",
-      "followers_count": 120,
-      "following_count": 45
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "per_page": 10,
-    "total_pages": 2,
-    "total_count": 16,
-    "has_next": true,
-    "has_previous": false
-  }
-}
-```
-
-## 🔔 Notification Endpoints
-
-### Get Notifications
-```bash
-curl -X GET "http://89.106.206.119:8000/api/notifications/?page=1&per_page=10" \
-  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "notifications": [
-    {
-      "id": 1,
-      "sender": {
-        "id": 2,
-        "username": "janedoe",
-        "profile_picture": "/media/profile_pictures/jane.jpg"
-      },
-      "notif_type": "like",
-      "message": "janedoe liked your post",
-      "post": {
-        "id": 1,
-        "content": "Just launched my new project! 🚀"
-      },
-      "is_read": false,
-      "created_at": "2024-01-15T16:30:00Z"
-    }
-  ],
-  "unread_count": 3,
-  "pagination": {
-    "page": 1,
-    "per_page": 10,
-    "total_pages": 1,
-    "total_count": 3,
-    "has_next": false,
-    "has_previous": false
-  }
-}
-```
-
-## 💬 Messaging Endpoints
-
-### Get Conversations
-```bash
-curl -X GET http://89.106.206.119:8000/api/conversations/ \
-  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "conversations": [
-    {
-      "id": 1,
-      "participants": [
-        {
-          "id": 1,
-          "username": "johndoe",
-          "profile_picture": "/media/profile_pictures/john.jpg"
-        },
-        {
-          "id": 2,
-          "username": "janedoe",
-          "profile_picture": "/media/profile_pictures/jane.jpg"
-        }
-      ],
-      "last_message": {
-        "id": 5,
-        "content": "Looking forward to it!",
-        "sender": 2,
-        "is_read": true,
-        "created_at": "2024-01-15T17:00:00Z"
-      },
-      "unread_count": 0,
-      "updated_at": "2024-01-15T17:00:00Z"
-    }
-  ],
-  "count": 1
-}
-```
-
-### Send Message
-```bash
-curl -X POST http://89.106.206.119:8000/api/conversations/1/send/ \
-  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
-  -H "Content-Type: application/json" \
-  -d '{
-    "content": "Hey! How are you doing?"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": {
-    "id": 6,
-    "conversation": 1,
-    "sender": {
-      "id": 1,
-      "username": "johndoe",
-      "profile_picture": "/media/profile_pictures/john.jpg"
-    },
-    "content": "Hey! How are you doing?",
-    "image": null,
-    "file": null,
-    "is_read": false,
-    "created_at": "2024-01-15T17:05:00Z"
-  }
-}
-```
-
-## 🏠 Basic Endpoint
-
-### API Root
-```bash
-curl -X GET http://89.106.206.119:8000/api/
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "API is running",
-  "endpoints": {
-    "auth": {
-      "signup": "/api/signup/",
-      "login": "/api/login/",
-      "logout": "/api/logout/",
-      "verify_email": "/api/verify-email/{token}/",
-      "password_reset_request": "/api/password-reset/request/",
-      "password_reset": "/api/password-reset/{token}/"
-    },
-    "profile": {
-      "get_profile": "/api/profile/",
-      "update_profile": "/api/profile/update/",
-      "update_profile_picture": "/api/profile/update-picture/",
-      "get_user_profile": "/api/users/{username}/profile/"
-    }
-    // ... (truncated for brevity)
-  }
-}
-```
-
-## ⚠️ Error Responses
-
-### Validation Error Example
-```json
-{
-  "success": false,
-  "message": "Validation failed",
-  "errors": {
-    "email": ["This field is required."],
-    "password": ["This password is too short."]
-  }
-}
-```
-
-### Authentication Error Example
-```json
-{
-  "success": false,
-  "message": "Authentication credentials were not provided."
-}
-```
-
-### Not Found Error Example
-```json
-{
-  "success": false,
-  "message": "Not found."
-}
-```
-
-## 🔑 Token Endpoints
-
-### Logout
-```bash
-curl -X POST http://89.106.206.119:8000/api/logout/ \
-  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
-  -H "Content-Type: application/json" \
-  -d '{
-    "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Logout successful"
-}
-```
-
-## 🖼️ Profile Picture Endpoints
-
-### Delete Profile Picture
-```bash
-curl -X DELETE http://89.106.206.119:8000/api/profile/delete-picture/ \
-  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-```
-
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Profile picture deleted successfully"
-}
-```
-
-## 🤝 Social Endpoints (Additional)
-
-### Unfollow User
-```bash
-curl -X POST http://89.106.206.119:8000/api/users/janedoe/unfollow/ \
-  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "You have unfollowed janedoe",
-  "followers_count": 15
-}
-```
-
-### Get User Following
-```bash
-curl -X GET "http://89.106.206.119:8000/api/users/johndoe/following/?page=1&per_page=10"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "following": [
-    {
-      "id": 2,
-      "username": "janedoe",
-      "profile_picture": "/media/profile_pictures/jane.jpg",
-      "bio": "Digital artist and designer",
-      "followers_count": 120,
-      "following_count": 45
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "per_page": 10,
-    "total_pages": 1,
-    "total_count": 8,
-    "has_next": false,
-    "has_previous": false
-  }
-}
-```
-
-## 📝 Post Endpoints (Additional)
 
 ### Get Post Detail
 ```bash
@@ -735,34 +435,138 @@ curl -X GET http://89.106.206.119:8000/api/posts/1/
     "media": [
       {
         "id": 1,
-        "file": "/media/posts/project_screenshot.jpg",
-        "media_type": "image"
+        "url": "/media/posts/project_screenshot.jpg",
+        "media_type": "image",
+        "caption": "",
+        "order": 0,
+        "file_size": 2048576
       }
     ],
     "likes_count": 25,
     "dislikes_count": 2,
     "comments_count": 8,
     "reposts_count": 3,
+    "replies_count": 2,
     "user_reaction": "like",
     "is_saved": false,
     "comments": [
       {
         "id": 1,
-        "user": {
+        "user": 2,
+        "user_info": {
           "id": 2,
           "username": "janedoe",
           "profile_picture": "/media/profile_pictures/jane.jpg"
         },
         "content": "Great work! This looks amazing! 👏",
         "likes_count": 2,
+        "replies_count": 1,
         "is_liked": false,
         "created_at": "2024-01-15T16:00:00Z"
       }
     ],
-    "replies": [],
+    "replies": [
+      {
+        "id": 3,
+        "author": {
+          "id": 2,
+          "username": "janedoe",
+          "profile_picture": "/media/profile_pictures/jane.jpg"
+        },
+        "content": "This is amazing! Great job!",
+        "category": "tech",
+        "tags": "",
+        "media": [],
+        "likes_count": 2,
+        "dislikes_count": 0,
+        "comments_count": 0,
+        "reposts_count": 0,
+        "replies_count": 0,
+        "user_reaction": null,
+        "is_saved": false,
+        "created_at": "2024-01-15T16:30:00Z",
+        "updated_at": "2024-01-15T16:30:00Z"
+      }
+    ],
     "created_at": "2024-01-15T14:30:00Z",
     "updated_at": "2024-01-15T14:30:00Z"
   }
+}
+```
+
+
+### Create Post
+```bash
+curl -X POST http://89.106.206.119:8000/api/posts/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
+  -F "content=Check out this amazing sunset! 🌅" \
+  -F "category=photography" \
+  -F "tags=sunset,nature" \
+  -F "media=@/path/to/sunset.jpg"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "post": {
+    "id": 2,
+    "author": 1,
+    "author_info": {
+      "id": 1,
+      "username": "johndoe",
+      "first_name": "John",
+      "last_name": "Doe",
+      "profile_picture": "/media/profiles/john.jpg",
+      "is_email_verified": true,
+      "followers_count": 15,
+      "following_count": 8,
+      "posts_count": 26
+    },
+    "content": "Check out this amazing sunset! 🌅",
+    "created_at": "2024-01-15T15:45:00Z",
+    "updated_at": "2024-01-15T15:45:00Z",
+    "tags": "sunset,nature",
+    "mentions": [],
+    "media": [
+      {
+        "id": 2,
+        "url": "/media/posts/images/sunset.jpg",
+        "media_type": "image",
+        "caption": "",
+        "order": 0,
+        "file_size": 1567890
+      }
+    ],
+    "category": "photography",
+    "parent": null,
+    "is_repost": false,
+    "original_post": null,
+    "likes_count": 0,
+    "dislikes_count": 0,
+    "comments_count": 0,
+    "reposts_count": 0,
+    "replies_count": 0,
+    "user_reaction": null,
+    "is_saved": false
+  }
+}
+```
+
+### Like Post
+```bash
+curl -X POST http://89.106.206.119:8000/api/posts/1/like/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Liked",
+  "likes_count": 26,
+  "dislikes_count": 2,
+  "user_reaction": "like"
 }
 ```
 
@@ -794,7 +598,7 @@ curl -X POST http://89.106.206.119:8000/api/posts/1/repost/ \
 {
   "success": true,
   "post": {
-    "id": 3,
+    "id": 4,
     "author": {
       "id": 2,
       "username": "janedoe",
@@ -803,6 +607,14 @@ curl -X POST http://89.106.206.119:8000/api/posts/1/repost/ \
     "content": "Just launched my new project! 🚀",
     "category": "tech",
     "tags": "django,react,webdev",
+    "media": [],
+    "likes_count": 0,
+    "dislikes_count": 0,
+    "comments_count": 0,
+    "reposts_count": 0,
+    "replies_count": 0,
+    "user_reaction": null,
+    "is_saved": false,
     "is_repost": true,
     "original_post": {
       "id": 1,
@@ -811,14 +623,8 @@ curl -X POST http://89.106.206.119:8000/api/posts/1/repost/ \
         "username": "johndoe"
       }
     },
-    "likes_count": 0,
-    "dislikes_count": 0,
-    "comments_count": 0,
-    "reposts_count": 0,
-    "user_reaction": null,
-    "is_saved": false,
-    "created_at": "2024-01-15T17:30:00Z",
-    "updated_at": "2024-01-15T17:30:00Z"
+    "created_at": "2024-01-15T18:30:00Z",
+    "updated_at": "2024-01-15T18:30:00Z"
   }
 }
 ```
@@ -845,32 +651,41 @@ curl -X GET http://89.106.206.119:8000/api/posts/1/thread/
     "media": [
       {
         "id": 1,
-        "file": "/media/posts/project_screenshot.jpg",
-        "media_type": "image"
+        "url": "/media/posts/project_screenshot.jpg",
+        "media_type": "image",
+        "caption": "",
+        "order": 0,
+        "file_size": 2048576
       }
     ],
     "likes_count": 25,
     "dislikes_count": 2,
     "comments_count": 8,
     "reposts_count": 3,
+    "replies_count": 2,
     "user_reaction": "like",
     "is_saved": false,
     "replies": [
       {
-        "id": 2,
+        "id": 3,
         "author": {
           "id": 2,
           "username": "janedoe",
           "profile_picture": "/media/profile_pictures/jane.jpg"
         },
         "content": "This is amazing! Great job!",
-        "parent": 1,
+        "category": "tech",
+        "tags": "",
+        "media": [],
         "likes_count": 2,
         "dislikes_count": 0,
         "comments_count": 0,
+        "reposts_count": 0,
+        "replies_count": 0,
         "user_reaction": null,
         "is_saved": false,
-        "created_at": "2024-01-15T16:30:00Z"
+        "created_at": "2024-01-15T16:30:00Z",
+        "updated_at": "2024-01-15T16:30:00Z"
       }
     ],
     "created_at": "2024-01-15T14:30:00Z",
@@ -931,14 +746,18 @@ curl -X GET "http://89.106.206.119:8000/api/posts/saved/?page=1&per_page=10" \
       "media": [
         {
           "id": 1,
-          "file": "/media/posts/project_screenshot.jpg",
-          "media_type": "image"
+          "url": "/media/posts/project_screenshot.jpg",
+          "media_type": "image",
+          "caption": "",
+          "order": 0,
+          "file_size": 2048576
         }
       ],
       "likes_count": 25,
       "dislikes_count": 2,
       "comments_count": 8,
       "reposts_count": 3,
+      "replies_count": 2,
       "user_reaction": "like",
       "is_saved": true,
       "created_at": "2024-01-15T14:30:00Z",
@@ -999,14 +818,18 @@ curl -X PUT http://89.106.206.119:8000/api/posts/1/update/ \
     "media": [
       {
         "id": 1,
-        "file": "/media/posts/project_screenshot.jpg",
-        "media_type": "image"
+        "url": "/media/posts/project_screenshot.jpg",
+        "media_type": "image",
+        "caption": "",
+        "order": 0,
+        "file_size": 2048576
       }
     ],
     "likes_count": 25,
     "dislikes_count": 2,
     "comments_count": 8,
     "reposts_count": 3,
+    "replies_count": 2,
     "user_reaction": "like",
     "is_saved": false,
     "created_at": "2024-01-15T14:30:00Z",
@@ -1038,14 +861,18 @@ curl -X GET "http://89.106.206.119:8000/api/posts/category/tech/?page=1&per_page
       "media": [
         {
           "id": 1,
-          "file": "/media/posts/project_screenshot.jpg",
-          "media_type": "image"
+          "url": "/media/posts/project_screenshot.jpg",
+          "media_type": "image",
+          "caption": "",
+          "order": 0,
+          "file_size": 2048576
         }
       ],
       "likes_count": 25,
       "dislikes_count": 2,
       "comments_count": 8,
       "reposts_count": 3,
+      "replies_count": 2,
       "user_reaction": "like",
       "is_saved": false,
       "created_at": "2024-01-15T14:30:00Z",
@@ -1087,14 +914,18 @@ curl -X GET "http://89.106.206.119:8000/api/users/johndoe/posts/?page=1&per_page
       "media": [
         {
           "id": 1,
-          "file": "/media/posts/project_screenshot.jpg",
-          "media_type": "image"
+          "url": "/media/posts/project_screenshot.jpg",
+          "media_type": "image",
+          "caption": "",
+          "order": 0,
+          "file_size": 2048576
         }
       ],
       "likes_count": 25,
       "dislikes_count": 2,
       "comments_count": 8,
       "reposts_count": 3,
+      "replies_count": 2,
       "user_reaction": "like",
       "is_saved": false,
       "created_at": "2024-01-15T14:30:00Z",
@@ -1125,7 +956,48 @@ curl -X GET "http://89.106.206.119:8000/api/users/johndoe/posts/?page=1&per_page
 }
 ```
 
-## 💬 Comment Endpoints
+## 💬 Comment Endpoints 
+
+### Comment on Post
+```bash
+curl -X POST http://89.106.206.119:8000/api/posts/1/comment/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Great work! This looks amazing! 👏"
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "comment": {
+    "id": 1,
+    "user": 2,
+    "user_info": {
+      "id": 2,
+      "username": "janedoe",
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "profile_picture": "/media/profiles/jane.jpg",
+      "is_email_verified": true,
+      "followers_count": 120,
+      "following_count": 45,
+      "posts_count": 67
+    },
+    "post": 1,
+    "content": "Great work! This looks amazing! 👏",
+    "created_at": "2024-01-15T16:00:00Z",
+    "parent": null,
+    "likes_count": 0,
+    "replies_count": 0,
+    "is_liked": false
+  },
+  "comments_count": 9
+}
+```
+
 
 ### Like Comment
 ```bash
@@ -1174,20 +1046,177 @@ curl -X PUT http://89.106.206.119:8000/api/comments/1/update/ \
   "message": "Comment updated successfully",
   "comment": {
     "id": 1,
-    "user": {
+    "user": 2,
+    "user_info": {
       "id": 2,
       "username": "janedoe",
       "profile_picture": "/media/profile_pictures/jane.jpg"
     },
     "content": "Updated comment with more details!",
     "likes_count": 0,
+    "replies_count": 0,
     "is_liked": false,
     "created_at": "2024-01-15T16:00:00Z"
   }
 }
 ```
 
-## 🔔 Notification Endpoints (Additional)
+## 🤝 Social Endpoints
+
+### Follow User
+```bash
+curl -X POST http://89.106.206.119:8000/api/users/janedoe/follow/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "You are now following janedoe",
+  "followers_count": 16
+}
+```
+
+### Unfollow User
+```bash
+curl -X POST http://89.106.206.119:8000/api/users/janedoe/unfollow/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "You have unfollowed janedoe",
+  "followers_count": 15
+}
+```
+
+### Get User Followers
+```bash
+curl -X GET "http://89.106.206.119:8000/api/users/johndoe/followers/?page=1&per_page=10"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "followers": [
+    {
+      "id": 2,
+      "username": "janedoe",
+      "email": "jane@example.com",
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "profile_picture": "/media/profiles/jane.jpg",
+      "bio": "Digital artist and designer",
+      "student_id": null,
+      "is_email_verified": true,
+      "followers_count": 120,
+      "following_count": 45,
+      "posts_count": 67,
+      "is_following": true,
+      "is_me": false,
+      "created_at": "2024-01-10T08:15:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 10,
+    "total_pages": 2,
+    "total_count": 16,
+    "has_next": true,
+    "has_previous": false
+  }
+}
+```
+
+### Get User Following
+```bash
+curl -X GET "http://89.106.206.119:8000/api/users/johndoe/following/?page=1&per_page=10"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "following": [
+    {
+      "id": 2,
+      "username": "janedoe",
+      "email": "jane@example.com",
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "profile_picture": "/media/profiles/jane.jpg",
+      "bio": "Digital artist and designer",
+      "student_id": null,
+      "is_email_verified": true,
+      "followers_count": 120,
+      "following_count": 45,
+      "posts_count": 67,
+      "is_following": true,
+      "is_me": false,
+      "created_at": "2024-01-10T08:15:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 10,
+    "total_pages": 1,
+    "total_count": 8,
+    "has_next": false,
+    "has_previous": false
+  }
+}
+```
+
+## 🔔 Notification Endpoints
+
+### Get Notifications
+```bash
+curl -X GET "http://89.106.206.119:8000/api/notifications/?page=1&per_page=10" \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "notifications": [
+    {
+      "id": 1,
+      "sender": 2,
+      "sender_info": {
+        "id": 2,
+        "username": "janedoe",
+        "first_name": "Jane",
+        "last_name": "Doe",
+        "profile_picture": "/media/profiles/jane.jpg",
+        "is_email_verified": true,
+        "followers_count": 120,
+        "following_count": 45,
+        "posts_count": 67
+      },
+      "notif_type": "like",
+      "post": 1,
+      "comment": null,
+      "message": "janedoe liked your post",
+      "is_read": false,
+      "created_at": "2024-01-15T16:30:00Z"
+    }
+  ],
+  "unread_count": 3,
+  "pagination": {
+    "page": 1,
+    "per_page": 10,
+    "total_pages": 1,
+    "total_count": 3,
+    "has_next": false,
+    "has_previous": false
+  }
+}
+```
 
 ### Mark Notifications as Read
 ```bash
@@ -1207,7 +1236,45 @@ curl -X POST http://89.106.206.119:8000/api/notifications/mark-read/ \
 }
 ```
 
-## 💬 Messaging Endpoints (Additional)
+## 💬 Messaging Endpoints
+
+### Get Conversations
+```bash
+curl -X GET http://89.106.206.119:8000/api/conversations/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "conversations": [
+    {
+      "id": 1,
+      "other_user": {
+        "id": 2,
+        "username": "janedoe",
+        "first_name": "Jane",
+        "last_name": "Doe",
+        "profile_picture": "/media/profiles/jane.jpg",
+        "is_email_verified": true,
+        "followers_count": 120,
+        "following_count": 45,
+        "posts_count": 67
+      },
+      "last_message": {
+        "content": "Looking forward to it!",
+        "sender": "janedoe",
+        "created_at": "2024-01-15T17:00:00Z",
+        "is_read": true
+      },
+      "unread_count": 0,
+      "updated_at": "2024-01-15T17:00:00Z"
+    }
+  ],
+  "count": 1
+}
+```
 
 ### Start Conversation
 ```bash
@@ -1221,18 +1288,17 @@ curl -X POST http://89.106.206.119:8000/api/conversations/start/janedoe/ \
   "success": true,
   "conversation": {
     "id": 2,
-    "participants": [
-      {
-        "id": 1,
-        "username": "johndoe",
-        "profile_picture": "/media/profile_pictures/john.jpg"
-      },
-      {
-        "id": 2,
-        "username": "janedoe",
-        "profile_picture": "/media/profile_pictures/jane.jpg"
-      }
-    ],
+    "other_user": {
+      "id": 2,
+      "username": "janedoe",
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "profile_picture": "/media/profiles/jane.jpg",
+      "is_email_verified": true,
+      "followers_count": 120,
+      "following_count": 45,
+      "posts_count": 67
+    },
     "last_message": null,
     "unread_count": 0,
     "updated_at": "2024-01-15T18:00:00Z"
@@ -1240,6 +1306,44 @@ curl -X POST http://89.106.206.119:8000/api/conversations/start/janedoe/ \
   "message": "Conversation started successfully"
 }
 ```
+
+### Send Message
+```bash
+curl -X POST http://89.106.206.119:8000/api/conversations/1/send/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Hey! How are you doing?"
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": {
+    "id": 6,
+    "sender": 1,
+    "sender_info": {
+      "id": 1,
+      "username": "johndoe",
+      "first_name": "John",
+      "last_name": "Doe",
+      "profile_picture": "/media/profiles/john.jpg",
+      "is_email_verified": true,
+      "followers_count": 15,
+      "following_count": 8,
+      "posts_count": 25
+    },
+    "content": "Hey! How are you doing?",
+    "image": null,
+    "file": null,
+    "is_read": false,
+    "created_at": "2024-01-15T17:05:00Z"
+  }
+}
+```
+
 
 ### Get Conversation Detail
 ```bash
@@ -1253,32 +1357,23 @@ curl -X GET "http://89.106.206.119:8000/api/conversations/1/?page=1&per_page=20"
   "success": true,
   "conversation": {
     "id": 1,
-    "participants": [
-      {
-        "id": 1,
-        "username": "johndoe",
-        "profile_picture": "/media/profile_pictures/john.jpg"
-      },
-      {
-        "id": 2,
-        "username": "janedoe",
-        "profile_picture": "/media/profile_pictures/jane.jpg"
-      }
-    ],
+    "other_user": {
+      "id": 2,
+      "username": "janedoe",
+      "profile_picture": "/media/profile_pictures/jane.jpg"
+    },
     "last_message": {
-      "id": 6,
-      "content": "Hey! How are you doing?",
-      "sender": 1,
-      "is_read": true,
-      "created_at": "2024-01-15T17:05:00Z"
+      "content": "Looking forward to it!",
+      "sender": "janedoe",
+      "created_at": "2024-01-15T17:00:00Z",
+      "is_read": true
     },
     "unread_count": 0,
-    "updated_at": "2024-01-15T17:05:00Z"
+    "updated_at": "2024-01-15T17:00:00Z"
   },
   "messages": [
     {
       "id": 6,
-      "conversation": 1,
       "sender": {
         "id": 1,
         "username": "johndoe",
@@ -1292,7 +1387,6 @@ curl -X GET "http://89.106.206.119:8000/api/conversations/1/?page=1&per_page=20"
     },
     {
       "id": 5,
-      "conversation": 1,
       "sender": {
         "id": 2,
         "username": "janedoe",
@@ -1347,7 +1441,6 @@ curl -X PUT http://89.106.206.119:8000/api/messages/1/update/ \
   "message": "Message updated successfully",
   "message_data": {
     "id": 1,
-    "conversation": 1,
     "sender": {
       "id": 1,
       "username": "johndoe",
@@ -1362,26 +1455,40 @@ curl -X PUT http://89.106.206.119:8000/api/messages/1/update/ \
 }
 ```
 
-## 🔐 Password Reset Endpoint
+## ⚠️ Error Responses
 
-### Reset Password
-```bash
-curl -X POST http://89.106.206.119:8000/api/password-reset/0c0ce97e-48b4-4ef9-822a-71361f8ea018/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "password": "newsecurepassword123",
-    "password_confirm": "newsecurepassword123"
-  }'
-```
-
-**Response:**
+### Validation Error
 ```json
 {
-  "success": true,
-  "message": "Password reset successfully. You can now login."
+  "success": false,
+  "message": "Validation failed",
+  "errors": {
+    "email": ["This field is required."],
+    "password": ["This password is too short."]
+  }
 }
 ```
 
+### Authentication Error
+```json
+{
+  "success": false,
+  "message": "Authentication credentials were not provided."
+}
 ```
 
-این endpointهای جدید را به فایل README.md موجود اضافه کنید تا مستندات کامل شود.
+### Not Found Error
+```json
+{
+  "success": false,
+  "message": "Not found."
+}
+```
+
+### Permission Error
+```json
+{
+  "success": false,
+  "message": "You do not have permission to perform this action."
+}
+```
