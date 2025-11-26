@@ -26,7 +26,7 @@ class User(AbstractUser):
     
     info = models.CharField(max_length=255, blank=True, null=True, verbose_name='info')
     phone_number = models.CharField(max_length=15, blank=True, null=True, verbose_name='phone_number')
-
+"""
     followers = models.ManyToManyField(
         'self', 
         symmetrical=False, 
@@ -34,7 +34,7 @@ class User(AbstractUser):
         blank=True,
         through='social.UserFollow'
     )
-
+"""
     class Meta:
         verbose_name = 'User'
         verbose_name_plural = 'Users'
