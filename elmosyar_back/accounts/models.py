@@ -32,7 +32,7 @@ class User(AbstractUser):
         'self', 
         symmetrical=False, 
         related_name='following', 
-        blank=True
+        blank=True,
         through='social.UserFollow'
     )
     
