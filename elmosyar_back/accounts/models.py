@@ -27,7 +27,7 @@ class User(AbstractUser):
     info = models.CharField(max_length=255, blank=True, null=True, verbose_name='info')
     phone_number = models.CharField(max_length=15, blank=True, null=True, verbose_name='phone_number')
 
-"""
+    """
     followers = models.ManyToManyField(
         'self', 
         symmetrical=False, 
@@ -35,7 +35,7 @@ class User(AbstractUser):
         blank=True
         through='social.UserFollow'
     )
-"""
+    """
     class Meta:
         verbose_name = 'User'
         verbose_name_plural = 'Users'
@@ -43,11 +43,10 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
-"""    
+    """    
     def _get_user_follow_model(self):
-        """استفاده از apps.get_model برای جلوگیری از circular imports"""
         return apps.get_model('social', 'UserFollow')
-"""
+    """
     def generate_email_verification_token(self):
         """تولید توکن برای تأیید ایمیل و هش کردن آن"""
         token = str(uuid.uuid4())
