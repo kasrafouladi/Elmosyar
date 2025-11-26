@@ -9,8 +9,7 @@ from .models import User
 class UserAdmin(BaseUserAdmin):
     list_display = [
         'username', 'email', 'full_name_display', 
-        'is_email_verified', 'is_staff', #'followers_count', 
-        #'following_count', 
+        'is_email_verified', 'is_staff', 'followers_count', 'following_count', 
         'posts_count', 'date_joined'
     ]
     list_filter = [

@@ -27,7 +27,7 @@ class User(AbstractUser):
     info = models.CharField(max_length=255, blank=True, null=True, verbose_name='info')
     phone_number = models.CharField(max_length=15, blank=True, null=True, verbose_name='phone_number')
 
-    """
+    
     followers = models.ManyToManyField(
         'self', 
         symmetrical=False, 
@@ -35,7 +35,7 @@ class User(AbstractUser):
         blank=True
         through='social.UserFollow'
     )
-    """
+    
     class Meta:
         verbose_name = 'User'
         verbose_name_plural = 'Users'
@@ -43,10 +43,10 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
-    """    
+    
     def _get_user_follow_model(self):
         return apps.get_model('social', 'UserFollow')
-    """
+    
     def generate_email_verification_token(self):
         """تولید توکن برای تأیید ایمیل و هش کردن آن"""
         token = str(uuid.uuid4())
@@ -81,7 +81,7 @@ class User(AbstractUser):
         if not self.email_verification_sent_at:
             return False            
         return timezone.now() - self.email_verification_sent_at <= timedelta(hours=1)
-    """
+    
     def follow(self, user):
         if user != self and not self.following.filter(id=user.id).exists():
             UserFollow = self._get_user_follow_model()
@@ -107,7 +107,7 @@ class User(AbstractUser):
     def following_count(self):
         UserFollow = self._get_user_follow_model()
         return UserFollow.objects.filter(follower=self).count()
-    """
+    
     @property
     def posts_count(self):
         """تعداد پست‌های کاربر"""
