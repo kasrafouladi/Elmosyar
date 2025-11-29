@@ -79,3 +79,26 @@ class PostMedia(models.Model):
                 os.remove(self.file.path)
         super().delete(*args, **kwargs)
 
+# ════════════════════════════════════════════════════════════
+# 📁 Category Format Model
+# ════════════════════════════════════════════════════════════
+
+class CategoryFormat(models.Model):
+    category = models.CharField(max_length=255, unique=True, db_index=True)
+    format_file = models.FileField(upload_to='category_formats/')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'category_format'
+
+    def __str__(self):
+        return f"Format for {self.category}"
+
+    def delete(self, *args, **kwargs):
+        """حذف فایل فیزیکی هنگام حذف فرمت"""
+        if self.format_file:
+            if os.path.isfile(self.format_file.path):
+                os.remove(self.format_file.path)
+        super().delete(*args, **kwargs)

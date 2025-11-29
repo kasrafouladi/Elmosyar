@@ -1478,7 +1478,160 @@ curl -X PUT http://89.106.206.119:8000/api/messages/1/update/ \
 }
 ```
 
+
+## 📁 Category Format Endpoints
+
+### Upload Category Format (Superuser Only)
+```bash
+curl -X POST http://89.106.206.119:8000/api/formats/upload/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
+  -H "Content-Type: multipart/form-data" \
+  -F "category=programming" \
+  -F "format_file=@/path/to/format.json"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Format uploaded successfully",
+  "format": {
+    "id": 1,
+    "category": "programming",
+    "file_url": "/media/category_formats/format_123.json",
+    "created_by": 1,
+    "created_by_info": {
+      "id": 1,
+      "username": "admin",
+      "email": "admin@example.com",
+      "first_name": "Admin",
+      "last_name": "User",
+      "profile_picture": "/media/profiles/admin.jpg",
+      "is_email_verified": true,
+      "followers_count": 15,
+      "following_count": 8,
+      "posts_count": 25
+    },
+    "created_at": "2024-01-15T12:00:00Z",
+    "updated_at": "2024-01-15T12:00:00Z"
+  }
+}
+```
+
+### Get Category Format (Public)
+```bash
+curl -X GET http://89.106.206.119:8000/api/formats/programming/
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "category": "programming",
+  "format": {
+    "required_fields": ["title", "description", "code"],
+    "optional_fields": ["tags", "language", "difficulty"],
+    "max_length": 5000,
+    "allowed_media_types": ["image", "code_snippet"],
+    "validation_rules": {
+      "title": {
+        "min_length": 5,
+        "max_length": 200
+      },
+      "code": {
+        "max_size": 10000
+      }
+    }
+  },
+  "last_updated": "2024-01-15T12:00:00Z"
+}
+```
+
+### Delete Category Format (Superuser Only)
+```bash
+curl -X DELETE http://89.106.206.119:8000/api/formats/programming/delete/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
+  -H "Content-Type: application/json"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Format deleted successfully"
+}
+```
+
+### Example Format JSON File
+**format.json:**
+```json
+{
+  "required_fields": ["title", "description", "code"],
+  "optional_fields": ["tags", "language", "difficulty"],
+  "max_length": 5000,
+  "allowed_media_types": ["image", "code_snippet"],
+  "validation_rules": {
+    "title": {
+      "min_length": 5,
+      "max_length": 200
+    },
+    "code": {
+      "max_size": 10000
+    }
+  },
+  "template": {
+    "title": "Post Title",
+    "description": "Describe your code...",
+    "code": "// Your code here",
+    "language": "python",
+    "difficulty": "beginner"
+  }
+}
+```
+
 ## ⚠️ Error Responses
+
+### Format Not Found
+```json
+{
+  "success": false,
+  "message": "No format found for category: programming"
+}
+```
+
+### Permission Denied (Non-Superuser)
+```json
+{
+  "success": false,
+  "message": "Only superusers can upload format files"
+}
+```
+
+### Invalid JSON File
+```json
+{
+  "success": false,
+  "message": "Invalid JSON file"
+}
+```
+
+### File Type Error
+```json
+{
+  "success": false,
+  "message": "Only JSON files are allowed"
+}
+```
+
+### Missing Required Fields
+```json
+{
+  "success": false,
+  "message": "Category is required"
+}
+```
+
+
 
 ### Validation Error
 ```json
