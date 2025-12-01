@@ -8,6 +8,7 @@ class CommentSerializer(serializers.ModelSerializer):
     likes_count = serializers.SerializerMethodField()
     replies_count = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
+    is_disliked = serializers.SerializerMethodField()
 
     class Meta:
         model = Comment
