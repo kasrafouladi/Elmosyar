@@ -464,8 +464,10 @@ curl -X GET http://89.106.206.119:8000/api/posts/1/
         },
         "content": "Great work! This looks amazing! 👏",
         "likes_count": 2,
+        "dislike_count": 1,
         "replies_count": 1,
         "is_liked": false,
+        "is_disliked": false,
         "created_at": "2024-01-15T16:00:00Z"
       }
     ],
