@@ -13,12 +13,12 @@ from django.http import JsonResponse
 def api_root(request):
     return JsonResponse({
         'message': 'Welcome to Elmosyar API',
-        'version': '1.0.1',
-        'apps': ['accounts', 'social', 'posts', 'interactions', 'notifications', 'messaging']
+        'version': '1.0.2',
+        'apps': ['accounts', 'social', 'posts', 'interactions', 'notifications', 'messaging', 'wallet']
     })
 
 urlpatterns = [
-    path('api/', api_root, name='api_root'),
+    path('', api_root, name='api_root'),
     path('admin/', admin.site.urls),
     
     # App routes
@@ -28,6 +28,7 @@ urlpatterns = [
     path('api/', include('interactions.urls')),
     path('api/notifications/', include('notifications.urls')),
     path('api/', include('messaging.urls')),
+    path('api/wallet/', include('wallet.urls')),
 ]
 
 if settings.DEBUG:
