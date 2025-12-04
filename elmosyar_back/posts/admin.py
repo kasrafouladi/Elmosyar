@@ -28,11 +28,11 @@ class PostAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at', 'likes_count', 'dislikes_count', 'comments_count']
     date_hierarchy = 'created_at'
     filter_horizontal = ['mentions', 'saved_by']
-    inlines = [PostMediaInline]  # اضافه کردن اینلاین برای مدیا
+    inlines = [PostMediaInline]
     
     fieldsets = (
         ('اطلاعات اصلی', {
-            'fields': ('author', 'content', 'category', 'tags')
+            'fields': ('author', 'content', 'category', 'tags', 'attributes')
         }),
         ('ریپوست', {
             'fields': ('is_repost', 'original_post'),
