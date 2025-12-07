@@ -111,7 +111,7 @@ def user_transactions(request):
 def purchase(request, post_id):
 
     try:
-        post = Post.objects.get(pk=post_id)
+        post = Post.objects.get(id=post_id)
     except Post.DoesNotExist:
         return Response({"error": True,
                          "message": "پست مورد نظر یافت نشد",
