@@ -145,7 +145,7 @@ def purchase(request, post_id):
 
     if response.status_code == 200:
         attrs = post.attributes.copy()
-        attrs["is_sold"] = True
+        attrs["isSoldOut"] = True
 
         post.attributes = attrs
         post.save(update_fields=["attributes"])
