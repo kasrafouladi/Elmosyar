@@ -88,7 +88,7 @@ INSTALLED_APPS = [
     "notifications",
     "messaging",
     "wallet",
-    "logger_manager",
+    "log_manager",
 
     "django.contrib.admin",
     "django.contrib.auth",
