@@ -9,6 +9,7 @@ from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
 from django.core.paginator import Paginator
 from django.contrib.admin.views.decorators import staff_member_required
+from django.views.generic import View
 from django.utils.decorators import method_decorator
 
 from .log_config import log_audit
@@ -30,9 +31,10 @@ class LogFileAdmin:
         os.makedirs(self.log_dir, exist_ok=True)
 
 
+# تبدیل کلاس‌های ویو به ویوهای مبتنی بر کلاس
 @method_decorator(staff_member_required, name='dispatch')
-class LogAdminView:
-    """ویوهای مدیریت لاگ در پنل ادمین"""
+class LogFilesListView(View):
+    """لیست تمام فایل‌های لاگ"""
     
     @staticmethod
     def get_log_directory():
@@ -40,11 +42,8 @@ class LogAdminView:
         os.makedirs(log_dir, exist_ok=True)
         return log_dir
     
-    @staticmethod
-    @staff_member_required
-    def log_files_list(request):
-        """لیست تمام فایل‌های لاگ"""
-        log_dir = LogAdminView.get_log_directory()
+    def get(self, request):
+        log_dir = self.get_log_directory()
         
         log_files = []
         for file_name in os.listdir(log_dir):
@@ -89,12 +88,20 @@ class LogAdminView:
         }
         
         return render(request, 'admin/log_manager/log_files_list.html', context)
+
+
+@method_decorator(staff_member_required, name='dispatch')
+class LogViewerView(View):
+    """نمایش محتوای یک فایل لاگ با فیلترها"""
     
     @staticmethod
-    @staff_member_required
-    def log_viewer(request):
-        """نمایش محتوای یک فایل لاگ با فیلترها"""
-        log_dir = LogAdminView.get_log_directory()
+    def get_log_directory():
+        log_dir = getattr(settings, 'LOG_DIR', os.path.join(settings.BASE_DIR, 'logs'))
+        os.makedirs(log_dir, exist_ok=True)
+        return log_dir
+    
+    def get(self, request):
+        log_dir = self.get_log_directory()
         
         # پارامترهای فیلتر
         log_file = request.GET.get('file', 'application.log')
@@ -218,17 +225,19 @@ class LogAdminView:
         }
         
         return render(request, 'admin/log_manager/log_viewer.html', context)
+
+
+@method_decorator(staff_member_required, name='dispatch')
+class DownloadLogView(View):
+    """دانلود فایل لاگ"""
     
-    @staticmethod
-    @staff_member_required
-    def download_log(request):
-        """دانلود فایل لاگ"""
+    def get(self, request):
         log_file = request.GET.get('file')
         
         if not log_file or not log_file.endswith('.log'):
             return JsonResponse({'error': 'نام فایل نامعتبر است'}, status=400)
         
-        log_dir = LogAdminView.get_log_directory()
+        log_dir = getattr(settings, 'LOG_DIR', os.path.join(settings.BASE_DIR, 'logs'))
         file_path = os.path.join(log_dir, log_file)
         
         if not os.path.exists(file_path):
@@ -244,20 +253,19 @@ class LogAdminView:
             response = HttpResponse(f.read(), content_type='text/plain; charset=utf-8')
             response['Content-Disposition'] = f'attachment; filename="{log_file}"'
             return response
+
+
+@method_decorator(staff_member_required, name='dispatch')
+class ClearLogView(View):
+    """پاک کردن یک فایل لاگ"""
     
-    @staticmethod
-    @staff_member_required
-    def clear_log(request):
-        """پاک کردن یک فایل لاگ"""
-        if request.method != 'POST':
-            return JsonResponse({'error': 'فقط متد POST مجاز است'}, status=405)
-        
+    def post(self, request):
         log_file = request.POST.get('file')
         
         if not log_file or not log_file.endswith('.log'):
             return JsonResponse({'error': 'نام فایل نامعتبر است'}, status=400)
         
-        log_dir = LogAdminView.get_log_directory()
+        log_dir = getattr(settings, 'LOG_DIR', os.path.join(settings.BASE_DIR, 'logs'))
         file_path = os.path.join(log_dir, log_file)
         
         if not os.path.exists(file_path):
@@ -276,12 +284,14 @@ class LogAdminView:
             return JsonResponse({'success': True, 'message': 'فایل لاگ با موفقیت پاک شد'})
         except Exception as e:
             return JsonResponse({'error': f'خطا در پاک کردن فایل: {str(e)}'}, status=500)
+
+
+@method_decorator(staff_member_required, name='dispatch')
+class LogStatisticsView(View):
+    """آمار و تحلیل لاگ‌ها"""
     
-    @staticmethod
-    @staff_member_required
-    def log_statistics(request):
-        """آمار و تحلیل لاگ‌ها"""
-        log_dir = LogAdminView.get_log_directory()
+    def get(self, request):
+        log_dir = getattr(settings, 'LOG_DIR', os.path.join(settings.BASE_DIR, 'logs'))
         
         statistics = {
             'files': [],
@@ -380,11 +390,11 @@ class LogManagerAdminSite:
     
     def get_urls(self):
         urls = [
-            path('logs/', LogAdminView.log_files_list, name='log_files_list'),
-            path('logs/viewer/', LogAdminView.log_viewer, name='log_viewer'),
-            path('logs/download/', LogAdminView.download_log, name='log_download'),
-            path('logs/clear/', LogAdminView.clear_log, name='log_clear'),
-            path('logs/statistics/', LogAdminView.log_statistics, name='log_statistics'),
+            path('logs/', LogFilesListView.as_view(), name='log_files_list'),
+            path('logs/viewer/', LogViewerView.as_view(), name='log_viewer'),
+            path('logs/download/', DownloadLogView.as_view(), name='log_download'),
+            path('logs/clear/', ClearLogView.as_view(), name='log_clear'),
+            path('logs/statistics/', LogStatisticsView.as_view(), name='log_statistics'),
         ]
         return urls
 
@@ -410,13 +420,12 @@ class LogManagerConfig:
     verbose_name = '🔍 مدیریت لاگ‌ها'
     
     def ready(self):
-        # می‌توانید سیگنال‌ها یا تنظیمات دیگر را اینجا اضافه کنید
         pass
 
 
 # ثبت در ادمین
-admin.site.site_header = "پنل مدیریت الموسیار"
-admin.site.site_title = "الموسیار"
+admin.site.site_header = "پنل مدیریت علموسیار"
+admin.site.site_title = "علموسیار"
 admin.site.index_title = "خوش آمدید به پنل مدیریت"
 
 # اضافه کردن URLها به ادمین
