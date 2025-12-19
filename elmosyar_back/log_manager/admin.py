@@ -423,11 +423,6 @@ class LogManagerConfig:
         pass
 
 
-# ثبت در ادمین
-admin.site.site_header = "پنل مدیریت علموسیار"
-admin.site.site_title = "علموسیار"
-admin.site.index_title = "خوش آمدید به پنل مدیریت"
-
 # اضافه کردن URLها به ادمین
 from django.contrib import admin as django_admin
 original_get_urls = django_admin.site.get_urls
