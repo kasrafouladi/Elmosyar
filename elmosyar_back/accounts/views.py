@@ -281,11 +281,11 @@ class LoginView(APIView):
                     send_verification_email(user)
                     return Response({
                         'success': False,
-                        'message': 'Please verify your email first, new verification email sent'
+                        'message': f'Please verify your email ({user.email}) first, new verification email sent'
                     }, status=status.HTTP_400_BAD_REQUEST)
                 return Response({
                     'success': False,
-                    'message': 'Please verify your email first'
+                    'message': f'Please verify your email ({user.email}) first'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             # Generate JWT tokens
