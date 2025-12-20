@@ -274,11 +274,13 @@ class LoginView(APIView):
                     send_verification_email(user)
                     return Response({
                         'success': False,
-                        'message': f'Please verify your email ({user.email}) first, new verification email sent'
+                        'message': f'Please verify your email first, new verification email sent',
+                        'email': user.email
                     }, status=status.HTTP_400_BAD_REQUEST)
                 return Response({
                     'success': False,
-                    'message': f'Please verify your email ({user.email}) first'
+                    'message': f'Please verify your email first',
+                    'email': user.email
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             if not user.is_active:
