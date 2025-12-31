@@ -365,7 +365,7 @@ curl -X DELETE http://89.106.206.119:8000/api/profile/delete-picture/ \
 }
 ```
 
-### **⚠️ Related Error Responses**
+#### **⚠️ Related Error Responses**
 
 ### Invalid Search JSON Format
 ```json
