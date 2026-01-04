@@ -219,8 +219,7 @@ def posts_list_create(request):
             user = get_object_or_404(settings.AUTH_USER_MODEL, username=username)
             posts = posts.filter(author=user)
         
-        # اگر کاربر وارد شده باشد، پست‌های کتگوری‌های ناشناس را فیلتر کن
-        if request.user.is_authenticated:
+        if request.username:
             posts = posts.exclude(category__anonymous=True)
         
         if search_json:
