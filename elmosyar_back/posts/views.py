@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
+from django.contrib.auth import get_user_model
 import json
 import mimetypes
 import re
@@ -23,6 +24,9 @@ from log_manager.log_config import log_info, log_error, log_warning, log_audit, 
 
 MAX_POST_CONTENT_LENGTH = 5000
 MAX_MEDIA_FILE_SIZE = 10 * 1024 * 1024
+
+# گرفتن مدل کاربر
+User = get_user_model()
 
 
 # ════════════════════════════════════════════════════════════
@@ -265,6 +269,20 @@ def validate_post_update_attributes(post, attributes, category):
         return False, f'Error validating format: {str(e)}'
 
 
+def can_user_modify_post(user, post):
+    """
+    بررسی می‌کند که آیا کاربر می‌تواند پست را ویرایش یا حذف کند
+    برای کتگوری‌های ناشناس، کاربر نمی‌تواند پست خودش را حذف/ویرایش کند
+    """
+    if post.category and post.category.anonymous:
+        # در کتگوری ناشناس، کاربر نمی‌تواند پست خودش را حذف/ویرایش کند
+        # (چون نویسنده ناشناس است)
+        return False
+    
+    # در کتگوری معمولی، فقط نویسنده می‌تواند پست را حذف/ویرایش کند
+    return post.author == user
+
+
 # ════════════════════════════════════════════════════════════
 # 📝 Post Endpoints
 # ════════════════════════════════════════════════════════════
@@ -287,11 +305,12 @@ def posts_list_create(request):
             posts = posts.filter(category__name=category_name)
         
         if username:
-            user = get_object_or_404(settings.AUTH_USER_MODEL, username=username)
+            user = get_object_or_404(User, username=username)
             posts = posts.filter(author=user)
-        
-        if username:
-            posts = posts.exclude(category__anonymous=True)
+            
+            # ❌ حذف شده: اگر username مشخص شده، پست‌های کتگوری ناشناس را حذف کن
+            # posts = posts.exclude(category__anonymous=True)
+            # در عوض، تمام پست‌های کاربر را نشان می‌دهیم (حتی در کتگوری ناشناس)
         
         if search_json:
             try:
@@ -403,7 +422,7 @@ def posts_list_create(request):
 
             if mentions_raw:
                 usernames = [u.strip() for u in mentions_raw.split(',') if u.strip()]
-                mentioned_users = settings.AUTH_USER_MODEL.objects.filter(username__in=usernames)
+                mentioned_users = User.objects.filter(username__in=usernames)
                 for mu in mentioned_users:
                     post.mentions.add(mu)
                     if mu != request.user:
@@ -451,7 +470,8 @@ def posts_list_create(request):
                 'media_count': len(media_files),
                 'has_parent': parent is not None,
                 'parent_id': parent.id if parent else None,
-                'has_attributes': bool(attributes)
+                'has_attributes': bool(attributes),
+                'is_anonymous_category': category.anonymous if category else False
             })
 
             serializer = PostSerializer(post, context={'request': request})
@@ -482,24 +502,8 @@ def post_detail(request, post_id):
             id=post_id
         )
         
-        # ✅ اصلاح: بررسی منطق دسترسی به کتگوری‌های ناشناس
-        if post.category and post.category.anonymous:
-            # کاربران وارد شده نمی‌توانند پست‌های کتگوری ناشناس را ببینند
-            if request.user.is_authenticated:
-                log_warning(f"Authenticated user attempted to access anonymous category post", request, {
-                    'post_id': post_id,
-                    'user_id': request.user.id
-                })
-                return Response({
-                    'success': False,
-                    'message': 'Access to posts in anonymous categories is not allowed for authenticated users'
-                }, status=status.HTTP_403_FORBIDDEN)
-            # کاربران ناشناس (غیرواردشده) می‌توانند ببینند اما author مخفی می‌شود
-            log_info(f"Anonymous user viewing anonymous category post", None, {
-                'post_id': post_id,
-                'category': post.category.name
-            })
-        
+        # ✅ اصلاح شده: کاربران واردشده می‌توانند پست‌های کتگوری ناشناس را ببینند
+        # فقط اطلاعات author و mentions در سریالایزر مخفی می‌شود
         log_info(f"Post details viewed", request, {
             'post_id': post_id,
             'author': post.author.username if post.author else 'anonymous',
@@ -543,30 +547,29 @@ def delete_post(request, post_id):
         with transaction.atomic():
             post = get_object_or_404(Post, id=post_id)
             
-            if post.author != request.user:
-                log_warning(f"User attempted to delete another user's post", request, {
+            # ✅ اصلاح شده: استفاده از تابع کمکی برای بررسی اجازه حذف
+            if not can_user_modify_post(request.user, post):
+                log_warning(f"User attempted to delete post they cannot modify", request, {
                     'post_id': post_id,
-                    'post_author': post.author.username
+                    'post_author': post.author.username if post.author else 'anonymous',
+                    'is_anonymous_category': post.category.anonymous if post.category else False
                 })
-                return Response({
-                    'success': False,
-                    'message': 'You can only delete your own posts'
-                }, status=status.HTTP_403_FORBIDDEN)
-            
-            # اگر پست در کتگوری ناشناس باشد، اجازه حذف نده
-            if post.category and post.category.anonymous:
-                log_warning(f"User attempted to delete post in anonymous category", request, {
-                    'post_id': post_id,
-                    'category': post.category.name
-                })
-                return Response({
-                    'success': False,
-                    'message': 'Cannot delete posts in anonymous categories'
-                }, status=status.HTTP_403_FORBIDDEN)
+                
+                if post.category and post.category.anonymous:
+                    return Response({
+                        'success': False,
+                        'message': 'Cannot delete posts in anonymous categories'
+                    }, status=status.HTTP_403_FORBIDDEN)
+                else:
+                    return Response({
+                        'success': False,
+                        'message': 'You can only delete your own posts'
+                    }, status=status.HTTP_403_FORBIDDEN)
             
             post_category = post.category.name if post.category else None
-            post_author = post.author.username
+            post_author = post.author.username if post.author else 'anonymous'
             has_media = post.media.exists()
+            is_anonymous = post.category.anonymous if post.category else False
             
             post.delete()
             
@@ -574,7 +577,8 @@ def delete_post(request, post_id):
                 'post_id': post_id,
                 'category': post_category,
                 'author': post_author,
-                'had_media': has_media
+                'had_media': has_media,
+                'was_anonymous': is_anonymous
             })
             
             return Response({
@@ -597,26 +601,24 @@ def update_post(request, post_id):
         with transaction.atomic():
             post = get_object_or_404(Post, id=post_id)
             
-            if post.author != request.user:
-                log_warning(f"User attempted to edit another user's post", request, {
+            # ✅ اصلاح شده: استفاده از تابع کمکی برای بررسی اجازه ویرایش
+            if not can_user_modify_post(request.user, post):
+                log_warning(f"User attempted to edit post they cannot modify", request, {
                     'post_id': post_id,
-                    'post_author': post.author.username
+                    'post_author': post.author.username if post.author else 'anonymous',
+                    'is_anonymous_category': post.category.anonymous if post.category else False
                 })
-                return Response({
-                    'success': False,
-                    'message': 'You can only edit your own posts'
-                }, status=status.HTTP_403_FORBIDDEN)
-            
-            # اگر پست در کتگوری ناشناس باشد، اجازه ویرایش نده
-            if post.category and post.category.anonymous:
-                log_warning(f"User attempted to edit post in anonymous category", request, {
-                    'post_id': post_id,
-                    'category': post.category.name
-                })
-                return Response({
-                    'success': False,
-                    'message': 'Cannot edit posts in anonymous categories'
-                }, status=status.HTTP_403_FORBIDDEN)
+                
+                if post.category and post.category.anonymous:
+                    return Response({
+                        'success': False,
+                        'message': 'Cannot edit posts in anonymous categories'
+                    }, status=status.HTTP_403_FORBIDDEN)
+                else:
+                    return Response({
+                        'success': False,
+                        'message': 'You can only edit your own posts'
+                    }, status=status.HTTP_403_FORBIDDEN)
             
             category_name = request.data.get('category')
             attributes = request.data.get('attributes')
@@ -659,7 +661,8 @@ def update_post(request, post_id):
                 log_audit(f"Post updated", request, {
                     'post_id': post_id,
                     **changes,
-                    'new_category': category_name or (post.category.name if post.category else None)
+                    'new_category': category_name or (post.category.name if post.category else None),
+                    'is_anonymous_category': post.category.anonymous if post.category else False
                 })
                 
                 return Response({
@@ -694,16 +697,14 @@ def post_repost(request, post_id):
         with transaction.atomic():
             original_post = get_object_or_404(Post, id=post_id)
             
-            # اگر پست اصلی در کتگوری ناشناس باشد، اجازه ریپوست نده
+            # ✅ اصلاح شده: کاربران می‌توانند از کتگوری‌های ناشناس ریپوست کنند
+            # اما باید دقت کرد که اطلاعات نویسنده مخفی بماند
             if original_post.category and original_post.category.anonymous:
-                log_warning(f"User attempted to repost from anonymous category", request, {
+                log_info(f"User reposting from anonymous category", request, {
                     'post_id': post_id,
                     'category': original_post.category.name
                 })
-                return Response({
-                    'success': False,
-                    'message': 'Cannot repost from anonymous categories'
-                }, status=status.HTTP_403_FORBIDDEN)
+                # اجازه ریپوست از کتگوری ناشناس داده می‌شود
             
             if original_post.author == request.user:
                 log_warning(f"User attempted to repost their own post", request, {'post_id': post_id})
@@ -736,19 +737,22 @@ def post_repost(request, post_id):
             for mu in original_post.mentions.all():
                 new_post.mentions.add(mu)
             
-            Notification.objects.create(
-                recipient=original_post.author,
-                sender=request.user,
-                notif_type='repost',
-                post=original_post,
-                message=f'{request.user.username} reposted your post'
-            )
+            # فقط اگر پست اصلی در کتگوری معمولی باشد، نوتیفیکیشن ایجاد کن
+            if not (original_post.category and original_post.category.anonymous):
+                Notification.objects.create(
+                    recipient=original_post.author,
+                    sender=request.user,
+                    notif_type='repost',
+                    post=original_post,
+                    message=f'{request.user.username} reposted your post'
+                )
             
             log_audit(f"Post reposted", request, {
                 'original_post_id': post_id,
                 'repost_id': new_post.id,
-                'original_author': original_post.author.username,
-                'category': original_post.category.name if original_post.category else None
+                'original_author': original_post.author.username if original_post.author else 'anonymous',
+                'category': original_post.category.name if original_post.category else None,
+                'is_anonymous_category': original_post.category.anonymous if original_post.category else False
             })
             
             serializer = PostSerializer(new_post, context={'request': request})
@@ -779,9 +783,10 @@ def posts_by_category(request, category_id):
         'media', 'mentions', 'reactions'
     ).order_by('-created_at')
     
-    # اگر کاربر وارد شده باشد، پست‌های کتگوری‌های ناشناس را فیلتر کن
-    if request.user.is_authenticated:
-        posts = posts.exclude(category__anonymous=True)
+    # ✅ اصلاح شده: حذف فیلتر کردن پست‌های کتگوری ناشناس
+    # کاربران واردشده می‌توانند پست‌های کتگوری ناشناس را ببینند
+    # if request.user.is_authenticated:
+    #     posts = posts.exclude(category__anonymous=True)
     
     paginator = Paginator(posts, per_page)
     try:
@@ -817,7 +822,7 @@ def posts_by_category(request, category_id):
 @permission_classes([AllowAny])
 def user_posts(request, username):
     """Get posts by specific user with pagination"""
-    user = get_object_or_404(settings.AUTH_USER_MODEL, username=username)
+    user = get_object_or_404(User, username=username)
     
     page = int(request.GET.get('page', 1))
     per_page = min(int(request.GET.get('per_page', 20)), 100)
@@ -829,9 +834,11 @@ def user_posts(request, username):
         'media', 'mentions', 'reactions'
     ).order_by('-created_at')
     
-    # اگر کاربر وارد شده باشد، پست‌های کتگوری‌های ناشناس را فیلتر کن
-    if request.user.is_authenticated:
-        posts = posts.exclude(category__anonymous=True)
+    # ✅ اصلاح شده: حذف فیلتر کردن پست‌های کتگوری ناشناس
+    # کاربر می‌تواند تمام پست‌های خودش را ببیند (حتی در کتگوری ناشناس)
+    # اما اطلاعات author در کتگوری ناشناس مخفی می‌شود
+    # if request.user.is_authenticated:
+    #     posts = posts.exclude(category__anonymous=True)
     
     paginator = Paginator(posts, per_page)
     try:
@@ -875,20 +882,21 @@ def post_thread(request, post_id):
             id=post_id
         )
         
-        # اگر کاربر وارد شده باشد و پست در کتگوری ناشناس باشد، دسترسی ممنوع
-        if request.user.is_authenticated and post.category and post.category.anonymous:
-            log_warning(f"Authenticated user attempted to access anonymous category post thread", request, {
-                'post_id': post_id
-            })
-            return Response({
-                'success': False,
-                'message': 'Access to posts in anonymous categories is not allowed for authenticated users'
-            }, status=status.HTTP_403_FORBIDDEN)
+        # ✅ اصلاح شده: کاربران واردشده می‌توانند پست‌های کتگوری ناشناس را ببینند
+        # if request.user.is_authenticated and post.category and post.category.anonymous:
+        #     log_warning(f"Authenticated user attempted to access anonymous category post thread", request, {
+        #         'post_id': post_id
+        #     })
+        #     return Response({
+        #         'success': False,
+        #         'message': 'Access to posts in anonymous categories is not allowed for authenticated users'
+        #     }, status=status.HTTP_403_FORBIDDEN)
         
         log_api_request(f"Post thread viewed", request, {
             'post_id': post_id,
-            'author': post.author.username,
-            'category': post.category.name if post.category else None
+            'author': post.author.username if post.author else 'anonymous',
+            'category': post.category.name if post.category else None,
+            'is_anonymous_category': post.category.anonymous if post.category else False
         })
         
         post_serializer = PostSerializer(post, context={'request': request})
@@ -920,16 +928,16 @@ def save_post(request, post_id):
         with transaction.atomic():
             post = get_object_or_404(Post, id=post_id)
             
-            # اگر پست در کتگوری ناشناس باشد، اجازه ذخیره نده
-            if post.category and post.category.anonymous:
-                log_warning(f"User attempted to save post in anonymous category", request, {
-                    'post_id': post_id,
-                    'category': post.category.name
-                })
-                return Response({
-                    'success': False,
-                    'message': 'Cannot save posts in anonymous categories'
-                }, status=status.HTTP_403_FORBIDDEN)
+            # ✅ اصلاح شده: کاربران می‌توانند پست‌های کتگوری ناشناس را ذخیره کنند
+            # if post.category and post.category.anonymous:
+            #     log_warning(f"User attempted to save post in anonymous category", request, {
+            #         'post_id': post_id,
+            #         'category': post.category.name
+            #     })
+            #     return Response({
+            #         'success': False,
+            #         'message': 'Cannot save posts in anonymous categories'
+            #     }, status=status.HTTP_403_FORBIDDEN)
             
             if post.saved_by.filter(id=request.user.id).exists():
                 log_warning(f"User attempted to save already saved post", request, {'post_id': post_id})
@@ -942,8 +950,9 @@ def save_post(request, post_id):
             
             log_audit(f"Post saved", request, {
                 'post_id': post_id,
-                'author': post.author.username,
-                'category': post.category.name if post.category else None
+                'author': post.author.username if post.author else 'anonymous',
+                'category': post.category.name if post.category else None,
+                'is_anonymous_category': post.category.anonymous if post.category else False
             })
             
             return Response({
@@ -966,16 +975,16 @@ def unsave_post(request, post_id):
         with transaction.atomic():
             post = get_object_or_404(Post, id=post_id)
             
-            # اگر پست در کتگوری ناشناس باشد، اجازه حذف از ذخیره‌ها نده
-            if post.category and post.category.anonymous:
-                log_warning(f"User attempted to unsave post in anonymous category", request, {
-                    'post_id': post_id,
-                    'category': post.category.name
-                })
-                return Response({
-                    'success': False,
-                    'message': 'Cannot unsave posts in anonymous categories'
-                }, status=status.HTTP_403_FORBIDDEN)
+            # ✅ اصلاح شده: کاربران می‌توانند پست‌های کتگوری ناشناس را از ذخیره‌ها حذف کنند
+            # if post.category and post.category.anonymous:
+            #     log_warning(f"User attempted to unsave post in anonymous category", request, {
+            #         'post_id': post_id,
+            #         'category': post.category.name
+            #     })
+            #     return Response({
+            #         'success': False,
+            #         'message': 'Cannot unsave posts in anonymous categories'
+            #     }, status=status.HTTP_403_FORBIDDEN)
             
             if not post.saved_by.filter(id=request.user.id).exists():
                 log_warning(f"User attempted to unsave non-saved post", request, {'post_id': post_id})
@@ -988,8 +997,9 @@ def unsave_post(request, post_id):
             
             log_audit(f"Post unsaved", request, {
                 'post_id': post_id,
-                'author': post.author.username,
-                'category': post.category.name if post.category else None
+                'author': post.author.username if post.author else 'anonymous',
+                'category': post.category.name if post.category else None,
+                'is_anonymous_category': post.category.anonymous if post.category else False
             })
             
             return Response({
@@ -1015,8 +1025,9 @@ def saved_posts(request):
         'media', 'mentions', 'reactions'
     ).order_by('-created_at')
     
-    # پست‌های کتگوری‌های ناشناس را فیلتر کن (کاربر وارد شده است)
-    saved_posts = saved_posts.exclude(category__anonymous=True)
+    # ✅ اصلاح شده: حذف فیلتر کردن پست‌های کتگوری ناشناس
+    # کاربر می‌تواند پست‌های ذخیره شده در کتگوری ناشناس را هم ببیند
+    # saved_posts = saved_posts.exclude(category__anonymous=True)
     
     paginator = Paginator(saved_posts, per_page)
     try:
