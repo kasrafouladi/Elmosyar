@@ -25,6 +25,8 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class PostSerializer(serializers.ModelSerializer):
+    # ✅ تغییر author به SerializerMethodField برای کنترل نمایش
+    author = serializers.SerializerMethodField()
     author_info = serializers.SerializerMethodField()
     media = PostMediaSerializer(many=True, read_only=True)
     mentions = serializers.SerializerMethodField()
@@ -46,24 +48,39 @@ class PostSerializer(serializers.ModelSerializer):
             'original_post', 'likes_count', 'dislikes_count', 'comments_count',
             'reposts_count', 'replies_count', 'user_reaction', 'is_saved', 'attributes'
         ]
-        read_only_fields = ['author', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_author(self, obj):
+        """
+        بازگرداندن آیدی نویسنده فقط اگر کتگوری ناشناس نباشد
+        """
+        request = self.context.get('request')
+        if obj.category and obj.category.anonymous:
+            # اگر کتگوری ناشناس باشد، author را مخفی کن
+            return None
+        
+        return obj.author.id
 
     def get_author_info(self, obj):
-        # اگر کتگوری ناشناس باشد، اطلاعات کاربر را مخفی کن
+        """
+        بازگرداندن اطلاعات کامل نویسنده فقط اگر کتگوری ناشناس نباشد
+        """
         request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            if obj.category and obj.category.anonymous:
-                return None
+        if obj.category and obj.category.anonymous:
+            # اگر کتگوری ناشناس باشد، اطلاعات نویسنده را مخفی کن
+            return None
         
         # در غیر این صورت اطلاعات کامل را برگردان
         return UserSerializer(obj.author, context=self.context).data
 
     def get_mentions(self, obj):
-        # اگر کتگوری ناشناس باشد، mentions را مخفی کن
+        """
+        بازگرداندن mentions فقط اگر کتگوری ناشناس نباشد
+        """
         request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            if obj.category and obj.category.anonymous:
-                return []
+        if obj.category and obj.category.anonymous:
+            # اگر کتگوری ناشناس باشد، mentions را مخفی کن
+            return []
         
         return UserSerializer(obj.mentions.all(), many=True, context=self.context).data
 

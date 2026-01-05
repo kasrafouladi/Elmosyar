@@ -64,7 +64,9 @@ def apply_advanced_search_filter(queryset, search_json, category):
             matching_keys[key_regex] = []
             for attr_key in format_keys:
                 try:
-                    if re.match(key_regex, attr_key):
+                    # تبدیل کلید format به استرینگ برای تطبیق با regex
+                    attr_key_str = str(attr_key)
+                    if re.match(key_regex, attr_key_str):
                         matching_keys[key_regex].append(attr_key)
                 except re.error:
                     log_error(f"Invalid regex pattern for key matching: {key_regex}")
@@ -89,9 +91,24 @@ def apply_advanced_search_filter(queryset, search_json, category):
             for regex_key, possible_keys in matching_keys.items():
                 match_all_criteria = False
                 for key in possible_keys:
-                    if re.match(search_criteria[regex_key], post_attributes[key]):
-                        match_all_criteria = True
-                        break
+                    # تبدیل کلید به استرینگ فقط برای چک کردن وجود
+                    key_str = str(key)
+                    if key_str in post_attributes:
+                        value = post_attributes[key_str]
+                        # برای مقادیر مختلف، رفتارهای مختلف:
+                        if isinstance(value, (list, dict)):
+                            # لیست و دیکشنری را به JSON string تبدیل می‌کنیم
+                            value_str = json.dumps(value, ensure_ascii=False)
+                        elif value is None:
+                            value_str = ""
+                        else:
+                            # سایر انواع را به استرینگ تبدیل می‌کنیم
+                            value_str = str(value)
+                        
+                        # اعمال regex
+                        if re.match(search_criteria[regex_key], value_str):
+                            match_all_criteria = True
+                            break
                 if not match_all_criteria:
                     break
             
@@ -132,16 +149,40 @@ def validate_post_attributes(attributes, category):
         with open(format_obj.format_file.path, 'r', encoding='utf-8') as f:
             format_data = json.load(f)
         
+        # یک کپی از attributes برای validation ایجاد می‌کنیم
+        # تا تغییرات روی رفرنس اصلی اعمال نشود
+        attrs_for_validation = {}
         for key, value in attributes.items():
-            if key in format_data:
-                if isinstance(value, (list, dict)):
-                    value_to_check = json.dumps(value, ensure_ascii=False)
-                else:
-                    value_to_check = str(value)
-
-                if not re.match(format_data[key], value_to_check):
-                    log_warning(f"Attribute validation failed: {key}={value} doesn't match pattern")
-                    return False, f'Attribute "{key}" does not match format pattern'
+            # کلید را به استرینگ تبدیل می‌کنیم (فقط برای validation)
+            key_str = str(key)
+            attrs_for_validation[key_str] = value
+        
+        for key_str, value in attrs_for_validation.items():
+            # کلید format_data هم به استرینگ تبدیل می‌کنیم برای تطبیق
+            format_keys = [str(k) for k in format_data.keys()]
+            if key_str in format_keys:
+                # پیدا کردن الگوی اصلی (با کلید اصلی)
+                original_key = None
+                for k in format_data.keys():
+                    if str(k) == key_str:
+                        original_key = k
+                        break
+                
+                if original_key:
+                    pattern = format_data[original_key]
+                    # آماده‌سازی مقدار برای validation
+                    if isinstance(value, (list, dict)):
+                        # لیست و دیکشنری را به JSON string تبدیل می‌کنیم
+                        value_to_check = json.dumps(value, ensure_ascii=False)
+                    elif value is None:
+                        value_to_check = ""
+                    else:
+                        # سایر انواع را به استرینگ تبدیل می‌کنیم
+                        value_to_check = str(value)
+                    
+                    if not re.match(pattern, value_to_check):
+                        log_warning(f"Attribute validation failed: {key_str}={value} doesn't match pattern")
+                        return False, f'Attribute "{key_str}" does not match format pattern'
         
         return True, None
     except Exception as e:
@@ -153,7 +194,6 @@ def validate_post_update_attributes(post, attributes, category):
     """
     Validate attributes for post update
     """
-
     if not category:
         return True, None
     
@@ -167,23 +207,54 @@ def validate_post_update_attributes(post, attributes, category):
         
         if attributes is not None:
             post_attributes = post.attributes or {}
-            merged_attributes = {**post_attributes, **attributes}
             
-            for key, value in merged_attributes.items():
-                if key in format_data:
-                    if isinstance(value, (list, dict)):
-                        value_to_check = json.dumps(value, ensure_ascii=False)
-                    else:
-                        value_to_check = str(value)
-
-                    if not re.match(format_data[key], value_to_check):
-                        log_warning(f"Update attribute validation failed: {key}={value}")
-                        return False, f'Attribute "{key}" does not match format pattern'
+            # یک کپی از merged attributes ایجاد می‌کنیم
+            merged_attributes = {}
             
-            for key, pattern in format_data.items():
-                if key not in merged_attributes:
-                    log_warning(f"Required attribute missing: {key}")
-                    return False, f'Attribute "{key}" is required and cannot be removed'
+            # اول post_attributes را اضافه می‌کنیم
+            for key, value in post_attributes.items():
+                key_str = str(key)
+                merged_attributes[key_str] = value
+            
+            # سپس attributes جدید را اضافه می‌کنیم (با تبدیل کلیدها)
+            for key, value in attributes.items():
+                key_str = str(key)
+                merged_attributes[key_str] = value
+            
+            # لیست کلیدهای format_data به صورت استرینگ
+            format_keys_str = [str(k) for k in format_data.keys()]
+            
+            for key_str, value in merged_attributes.items():
+                if key_str in format_keys_str:
+                    # پیدا کردن الگوی اصلی
+                    original_key = None
+                    for k in format_data.keys():
+                        if str(k) == key_str:
+                            original_key = k
+                            break
+                    
+                    if original_key:
+                        pattern = format_data[original_key]
+                        # آماده‌سازی مقدار برای validation
+                        if isinstance(value, (list, dict)):
+                            # لیست و دیکشنری را به JSON string تبدیل می‌کنیم
+                            value_to_check = json.dumps(value, ensure_ascii=False)
+                        elif value is None:
+                            value_to_check = ""
+                        else:
+                            # سایر انواع را به استرینگ تبدیل می‌کنیم
+                            value_to_check = str(value)
+                        
+                        if not re.match(pattern, value_to_check):
+                            log_warning(f"Update attribute validation failed: {key_str}={value}")
+                            return False, f'Attribute "{key_str}" does not match format pattern'
+            
+            # بررسی وجود کلیدهای اجباری (با تبدیل به استرینگ)
+            for original_key, pattern in format_data.items():
+                key_str = str(original_key)
+                if key_str not in merged_attributes:
+                    log_warning(f"Required attribute missing: {key_str}")
+                    return False, f'Attribute "{key_str}" is required and cannot be removed'
         
         return True, None
     except Exception as e:
@@ -411,24 +482,36 @@ def post_detail(request, post_id):
             id=post_id
         )
         
-        # اگر کاربر وارد شده باشد و پست در کتگوری ناشناس باشد، دسترسی ممنوع
-        if request.user.is_authenticated and post.category and post.category.anonymous:
-            log_warning(f"Authenticated user attempted to access anonymous category post", request, {
-                'post_id': post_id
+        # ✅ اصلاح: بررسی منطق دسترسی به کتگوری‌های ناشناس
+        if post.category and post.category.anonymous:
+            # کاربران وارد شده نمی‌توانند پست‌های کتگوری ناشناس را ببینند
+            if request.user.is_authenticated:
+                log_warning(f"Authenticated user attempted to access anonymous category post", request, {
+                    'post_id': post_id,
+                    'user_id': request.user.id
+                })
+                return Response({
+                    'success': False,
+                    'message': 'Access to posts in anonymous categories is not allowed for authenticated users'
+                }, status=status.HTTP_403_FORBIDDEN)
+            # کاربران ناشناس (غیرواردشده) می‌توانند ببینند اما author مخفی می‌شود
+            log_info(f"Anonymous user viewing anonymous category post", None, {
+                'post_id': post_id,
+                'category': post.category.name
             })
-            return Response({
-                'success': False,
-                'message': 'Access to posts in anonymous categories is not allowed for authenticated users'
-            }, status=status.HTTP_403_FORBIDDEN)
         
         log_info(f"Post details viewed", request, {
             'post_id': post_id,
-            'author': post.author.username,
-            'category': post.category.name if post.category else None
+            'author': post.author.username if post.author else 'anonymous',
+            'category': post.category.name if post.category else None,
+            'is_anonymous_category': post.category.anonymous if post.category else False
         })
         
         post_serializer = PostSerializer(post, context={'request': request})
         data = post_serializer.data
+        
+        # برای کتگوری‌های ناشناس، اطلاعات author و mentions باید مخفی باشند
+        # که این کار در سریالایزر انجام شده است
         
         comments = Comment.objects.filter(post=post).select_related('user').prefetch_related('likes').order_by('created_at')
         comment_serializer = CommentSerializer(comments, many=True, context={'request': request})

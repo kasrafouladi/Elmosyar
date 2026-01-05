@@ -51,6 +51,21 @@ class Post(models.Model):
     @property
     def comments_count(self):
         return self.comments.count()
+    
+    @property
+    def is_anonymous(self):
+        """بررسی می‌کند آیا پست در یک کتگوری ناشناس است یا نه"""
+        return self.category and self.category.anonymous
+    
+    @property
+    def visible_author(self):
+        """نویسنده قابل مشاهده (برای کتگوری‌های ناشناس None برمی‌گرداند)"""
+        return None if self.is_anonymous else self.author
+    
+    @property
+    def visible_mentions(self):
+        """Mentions قابل مشاهده (برای کتگوری‌های ناشناس لیست خالی برمی‌گرداند)"""
+        return [] if self.is_anonymous else list(self.mentions.all())
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
