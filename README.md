@@ -52,7 +52,12 @@ curl -X POST http://89.106.206.119:8000/api/login/ \
   }'
 ```
 
-**Response:**
+**Response Headers:**
+```
+Set-Cookie: refresh_token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...; HttpOnly; Secure; SameSite=Strict; Path=/api/token/refresh/; Max-Age=604800
+```
+
+**Response Body:**
 ```json
 {
   "success": true,
@@ -72,32 +77,29 @@ curl -X POST http://89.106.206.119:8000/api/login/ \
     "posts_count": 12,
     "created_at": "2024-01-15T10:30:00Z"
   },
-  "tokens": {
-    "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-    "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-  }
+  "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
 }
 ```
-
 
 ### Logout
 ```bash
 curl -X POST http://89.106.206.119:8000/api/logout/ \
   -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
-  -H "Content-Type: application/json" \
-  -d '{
-    "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-  }'
+  -H "Content-Type: application/json"
 ```
 
-**Response:**
+**Response Headers:**
+```
+Set-Cookie: refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Strict; Path=/api/token/refresh/
+```
+
+**Response Body:**
 ```json
 {
   "success": true,
   "message": "Logout successful"
 }
 ```
-
 
 ### Verify Token
 ```bash
@@ -119,13 +121,15 @@ curl -X POST http://89.106.206.119:8000/api/token/verify/ \
 ### Refresh Token
 ```bash
 curl -X POST http://89.106.206.119:8000/api/token/refresh/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-  }'
+  -H "Content-Type: application/json"
 ```
 
-**Response:**
+**Response Headers:**
+```
+Set-Cookie: refresh_token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...; HttpOnly; Secure; SameSite=Strict; Path=/api/token/refresh/; Max-Age=604800
+```
+
+**Response Body:**
 ```json
 {
   "success": true,
@@ -138,7 +142,12 @@ curl -X POST http://89.106.206.119:8000/api/token/refresh/ \
 curl http://89.106.206.119:8000/api/verify-email/0c0ce97e-48b4-4ef9-822a-71361f8ea018/
 ```
 
-**Response:**
+**Response Headers:**
+```
+Set-Cookie: refresh_token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...; HttpOnly; Secure; SameSite=Strict; Path=/api/token/refresh/; Max-Age=86400
+```
+
+**Response Body:**
 ```json
 {
   "success": true,
@@ -158,10 +167,7 @@ curl http://89.106.206.119:8000/api/verify-email/0c0ce97e-48b4-4ef9-822a-71361f8
     "posts_count": 0,
     "created_at": "2024-01-15T10:30:00Z"
   },
-  "tokens": {
-    "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-    "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-  }
+  "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
 }
 ```
 
@@ -365,7 +371,21 @@ curl -X DELETE http://89.106.206.119:8000/api/profile/delete-picture/ \
 }
 ```
 
-## ⚠️ Related Error Responses
+### Category Format Response with Anonymous Field
+```json
+{
+  "success": true,
+  "category": "products",
+  "format": {
+    "name": "^[a-zA-Z0-9\\s]{3,100}$",
+    "price": "^[0-9]+(\\.[0-9]{1,2})?$"
+  },
+  "last_updated": "2024-01-16T10:30:00Z",
+  "is_anonymous": false
+}
+```
+
+#### **⚠️ Related Error Responses**
 
 ### Invalid Search JSON Format
 ```json
@@ -415,6 +435,22 @@ curl -X DELETE http://89.106.206.119:8000/api/profile/delete-picture/ \
 }
 ```
 
+### Access to Anonymous Category Denied
+```json
+{
+  "success": false,
+  "message": "Access to posts in anonymous categories is not allowed for authenticated users"
+}
+```
+
+### Cannot Modify Anonymous Category Post
+```json
+{
+  "success": false,
+  "message": "Cannot delete posts in anonymous categories"
+}
+```
+
 ### 📊 Post Attributes Structure
 
 Posts now support structured data through the `attributes` field. This allows for advanced filtering and validation based on category-specific formats.
@@ -423,7 +459,6 @@ Posts now support structured data through the `attributes` field. This allows fo
 ```json
 {
   "id": 45,
-  "content": "Django REST Framework Tutorial",
   "category": "tutorials",
   "attributes": {
     "difficulty": "intermediate",
@@ -444,6 +479,7 @@ Posts now support structured data through the `attributes` field. This allows fo
 - Regex patterns are applied to post attributes
 - Both format validation and search regex are applied
 - Category must be specified for advanced search
+- Posts in anonymous categories are hidden from authenticated users
 
 ### Validation Flow:
 1. When creating/updating a post with attributes
@@ -452,6 +488,11 @@ Posts now support structured data through the `attributes` field. This allows fo
 4. Returns error if validation fails
 5. During search, applies both format validation and search criteria
 
+### Anonymous Categories Rules:
+1. Posts in anonymous categories are invisible to authenticated users
+2. Author information is hidden for posts in anonymous categories
+3. Cannot perform actions (like, save, repost) on anonymous category posts
+4. Anonymous flag can be set when creating/updating category formats
 
 ### Get Posts (with pagination and filters)
 ```bash
@@ -466,6 +507,7 @@ curl -X GET "http://89.106.206.119:8000/api/posts/?category=programming&search={
   "posts": [
     {
       "id": 45,
+      "author": 1,
       "author_info": {
         "id": 1,
         "username": "johndoe",
@@ -477,9 +519,14 @@ curl -X GET "http://89.106.206.119:8000/api/posts/?category=programming&search={
         "following_count": 8,
         "posts_count": 25
       },
-      "content": "Python tutorial for beginners",
       "category": "programming",
-      "tags": "python,tutorial",
+      "category_info": {
+        "id": 1,
+        "name": "programming",
+        "anonymous": false,
+        "created_at": "2024-01-15T10:30:00Z",
+        "updated_at": "2024-01-15T10:30:00Z"
+      },
       "attributes": {
         "difficulty": "easy",
         "language": "python",
@@ -507,6 +554,53 @@ curl -X GET "http://89.106.206.119:8000/api/posts/?category=programming&search={
 }
 ```
 
+### Get Posts from Anonymous Category (for non-authenticated users)
+```bash
+curl -X GET "http://89.106.206.119:8000/api/posts/?category=confessions"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "posts": [
+    {
+      "id": 67,
+      "author": 3,
+      "author_info": null,
+      "category": "confessions",
+      "category_info": {
+        "id": 2,
+        "name": "confessions",
+        "anonymous": true,
+        "created_at": "2024-01-16T09:15:00Z",
+        "updated_at": "2024-01-16T09:15:00Z"
+      },
+      "attributes": {
+        "message": "I have something important to share",
+        "emotion": "anxious"
+      },
+      "likes_count": 5,
+      "dislikes_count": 0,
+      "comments_count": 3,
+      "reposts_count": 0,
+      "replies_count": 0,
+      "user_reaction": null,
+      "is_saved": false,
+      "created_at": "2024-01-16T11:30:00Z",
+      "updated_at": "2024-01-16T11:30:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 20,
+    "total_pages": 2,
+    "total_count": 25,
+    "has_next": true,
+    "has_previous": false
+  }
+}
+```
 
 ### Get Post Detail
 ```bash
@@ -520,14 +614,20 @@ curl -X GET http://89.106.206.119:8000/api/posts/1/ \
   "success": true,
   "post": {
     "id": 1,
-    "author": {
+    "author": 1,
+    "author_info": {
       "id": 1,
       "username": "johndoe",
       "profile_picture": "/media/profile_pictures/john.jpg"
     },
-    "content": "Just launched my new project! 🚀",
     "category": "tech",
-    "tags": "django,react,webdev",
+    "category_info": {
+      "id": 1,
+      "name": "tech",
+      "anonymous": false,
+      "created_at": "2024-01-15T10:30:00Z",
+      "updated_at": "2024-01-15T10:30:00Z"
+    },
     "media": [
       {
         "id": 1,
@@ -538,6 +638,11 @@ curl -X GET http://89.106.206.119:8000/api/posts/1/ \
         "file_size": 2048576
       }
     ],
+    "mentions": [],
+    "attributes": {
+      "type": "project",
+      "status": "launched"
+    },
     "likes_count": 25,
     "dislikes_count": 2,
     "comments_count": 8,
@@ -566,15 +671,18 @@ curl -X GET http://89.106.206.119:8000/api/posts/1/ \
     "replies": [
       {
         "id": 3,
-        "author": {
+        "author": 2,
+        "author_info": {
           "id": 2,
           "username": "janedoe",
           "profile_picture": "/media/profile_pictures/jane.jpg"
         },
-        "content": "This is amazing! Great job!",
         "category": "tech",
-        "tags": "",
         "media": [],
+        "mentions": [],
+        "attributes": {
+          "type": "reply"
+        },
         "likes_count": 2,
         "dislikes_count": 0,
         "comments_count": 0,
@@ -592,23 +700,14 @@ curl -X GET http://89.106.206.119:8000/api/posts/1/ \
 }
 ```
 
-
-### Create Post
+### Create Post (with category auto-creation)
 ```bash
 curl -X POST http://89.106.206.119:8000/api/posts/ \
   -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
-  -H "Content-Type: application/json" \
-  -d '{
-    "content": "Advanced Python tutorial with OOP concepts",
-    "category": "programming",
-    "tags": "python,oop,advanced",
-    "attributes": {
-      "difficulty": "medium",
-      "language": "python",
-      "duration": "45min",
-      "topics": ["classes", "inheritance", "polymorphism"]
-    }
-  }'
+  -H "Content-Type: multipart/form-data" \
+  -F "category=advanced-python" \
+  -F "attributes={\"difficulty\":\"medium\",\"language\":\"python\",\"duration\":\"45min\",\"topics\":[\"classes\",\"inheritance\",\"polymorphism\"]}" \
+  -F "media=@tutorial.jpg"
 ```
 
 **Response:**
@@ -629,13 +728,27 @@ curl -X POST http://89.106.206.119:8000/api/posts/ \
       "following_count": 8,
       "posts_count": 27
     },
-    "content": "Advanced Python tutorial with OOP concepts",
     "created_at": "2024-01-16T09:15:00Z",
     "updated_at": "2024-01-16T09:15:00Z",
-    "tags": "python,oop,advanced",
     "mentions": [],
-    "media": [],
-    "category": "programming",
+    "media": [
+      {
+        "id": 12,
+        "url": "/media/posts/tutorial.jpg",
+        "media_type": "image",
+        "caption": "",
+        "order": 0,
+        "file_size": 1048576
+      }
+    ],
+    "category": 3,
+    "category_info": {
+      "id": 3,
+      "name": "advanced-python",
+      "anonymous": false,
+      "created_at": "2024-01-16T09:15:00Z",
+      "updated_at": "2024-01-16T09:15:00Z"
+    },
     "parent": null,
     "is_repost": false,
     "original_post": null,
@@ -702,15 +815,26 @@ curl -X POST http://89.106.206.119:8000/api/posts/1/repost/ \
   "success": true,
   "post": {
     "id": 4,
-    "author": {
+    "author": 2,
+    "author_info": {
       "id": 2,
       "username": "janedoe",
       "profile_picture": "/media/profile_pictures/jane.jpg"
     },
-    "content": "Just launched my new project! 🚀",
-    "category": "tech",
-    "tags": "django,react,webdev",
+    "category": 1,
+    "category_info": {
+      "id": 1,
+      "name": "tech",
+      "anonymous": false,
+      "created_at": "2024-01-15T10:30:00Z",
+      "updated_at": "2024-01-15T10:30:00Z"
+    },
     "media": [],
+    "mentions": [],
+    "attributes": {
+      "type": "project",
+      "status": "launched"
+    },
     "likes_count": 0,
     "dislikes_count": 0,
     "comments_count": 0,
@@ -721,7 +845,8 @@ curl -X POST http://89.106.206.119:8000/api/posts/1/repost/ \
     "is_repost": true,
     "original_post": {
       "id": 1,
-      "author": {
+      "author": 1,
+      "author_info": {
         "id": 1,
         "username": "johndoe"
       }
@@ -743,14 +868,20 @@ curl -X GET http://89.106.206.119:8000/api/posts/1/thread/
   "success": true,
   "thread": {
     "id": 1,
-    "author": {
+    "author": 1,
+    "author_info": {
       "id": 1,
       "username": "johndoe",
       "profile_picture": "/media/profile_pictures/john.jpg"
     },
-    "content": "Just launched my new project! 🚀",
     "category": "tech",
-    "tags": "django,react,webdev",
+    "category_info": {
+      "id": 1,
+      "name": "tech",
+      "anonymous": false,
+      "created_at": "2024-01-15T10:30:00Z",
+      "updated_at": "2024-01-15T10:30:00Z"
+    },
     "media": [
       {
         "id": 1,
@@ -761,6 +892,11 @@ curl -X GET http://89.106.206.119:8000/api/posts/1/thread/
         "file_size": 2048576
       }
     ],
+    "mentions": [],
+    "attributes": {
+      "type": "project",
+      "status": "launched"
+    },
     "likes_count": 25,
     "dislikes_count": 2,
     "comments_count": 8,
@@ -771,15 +907,25 @@ curl -X GET http://89.106.206.119:8000/api/posts/1/thread/
     "replies": [
       {
         "id": 3,
-        "author": {
+        "author": 2,
+        "author_info": {
           "id": 2,
           "username": "janedoe",
           "profile_picture": "/media/profile_pictures/jane.jpg"
         },
-        "content": "This is amazing! Great job!",
         "category": "tech",
-        "tags": "",
+        "category_info": {
+          "id": 1,
+          "name": "tech",
+          "anonymous": false,
+          "created_at": "2024-01-15T10:30:00Z",
+          "updated_at": "2024-01-15T10:30:00Z"
+        },
         "media": [],
+        "mentions": [],
+        "attributes": {
+          "type": "reply"
+        },
         "likes_count": 2,
         "dislikes_count": 0,
         "comments_count": 0,
@@ -838,14 +984,20 @@ curl -X GET "http://89.106.206.119:8000/api/posts/saved/?page=1&per_page=10" \
   "posts": [
     {
       "id": 1,
-      "author": {
+      "author": 1,
+      "author_info": {
         "id": 1,
         "username": "johndoe",
         "profile_picture": "/media/profile_pictures/john.jpg"
       },
-      "content": "Just launched my new project! 🚀",
-      "category": "tech",
-      "tags": "django,react,webdev",
+      "category": 1,
+      "category_info": {
+        "id": 1,
+        "name": "tech",
+        "anonymous": false,
+        "created_at": "2024-01-15T10:30:00Z",
+        "updated_at": "2024-01-15T10:30:00Z"
+      },
       "media": [
         {
           "id": 1,
@@ -856,6 +1008,11 @@ curl -X GET "http://89.106.206.119:8000/api/posts/saved/?page=1&per_page=10" \
           "file_size": 2048576
         }
       ],
+      "mentions": [],
+      "attributes": {
+        "type": "project",
+        "status": "launched"
+      },
       "likes_count": 25,
       "dislikes_count": 2,
       "comments_count": 8,
@@ -898,6 +1055,7 @@ curl -X PUT http://89.106.206.119:8000/api/posts/56/update/ \
   -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
   -H "Content-Type: application/json" \
   -d '{
+    "category": "advanced-python-updated",
     "attributes": {
       "difficulty": "hard",
       "language": "python",
@@ -927,10 +1085,16 @@ curl -X PUT http://89.106.206.119:8000/api/posts/56/update/ \
       "following_count": 8,
       "posts_count": 27
     },
-    "content": "Advanced Python tutorial with OOP concepts",
     "created_at": "2024-01-16T09:15:00Z",
     "updated_at": "2024-01-16T10:30:00Z",
-    "tags": "python,oop,advanced",
+    "category": 4,
+    "category_info": {
+      "id": 4,
+      "name": "advanced-python-updated",
+      "anonymous": false,
+      "created_at": "2024-01-16T10:30:00Z",
+      "updated_at": "2024-01-16T10:30:00Z"
+    },
     "attributes": {
       "difficulty": "hard",
       "language": "python",
@@ -961,14 +1125,20 @@ curl -X GET "http://89.106.206.119:8000/api/posts/category/tech/?page=1&per_page
   "posts": [
     {
       "id": 1,
-      "author": {
+      "author": 1,
+      "author_info": {
         "id": 1,
         "username": "johndoe",
         "profile_picture": "/media/profile_pictures/john.jpg"
       },
-      "content": "Just launched my new project! 🚀",
-      "category": "tech",
-      "tags": "django,react,webdev",
+      "category": 1,
+      "category_info": {
+        "id": 1,
+        "name": "tech",
+        "anonymous": false,
+        "created_at": "2024-01-15T10:30:00Z",
+        "updated_at": "2024-01-15T10:30:00Z"
+      },
       "media": [
         {
           "id": 1,
@@ -979,6 +1149,11 @@ curl -X GET "http://89.106.206.119:8000/api/posts/category/tech/?page=1&per_page
           "file_size": 2048576
         }
       ],
+      "mentions": [],
+      "attributes": {
+        "type": "project",
+        "status": "launched"
+      },
       "likes_count": 25,
       "dislikes_count": 2,
       "comments_count": 8,
@@ -1014,14 +1189,20 @@ curl -X GET "http://89.106.206.119:8000/api/users/johndoe/posts/?page=1&per_page
   "posts": [
     {
       "id": 1,
-      "author": {
+      "author": 1,
+      "author_info": {
         "id": 1,
         "username": "johndoe",
         "profile_picture": "/media/profile_pictures/john.jpg"
       },
-      "content": "Just launched my new project! 🚀",
-      "category": "tech",
-      "tags": "django,react,webdev",
+      "category": 1,
+      "category_info": {
+        "id": 1,
+        "name": "tech",
+        "anonymous": false,
+        "created_at": "2024-01-15T10:30:00Z",
+        "updated_at": "2024-01-15T10:30:00Z"
+      },
       "media": [
         {
           "id": 1,
@@ -1032,6 +1213,11 @@ curl -X GET "http://89.106.206.119:8000/api/users/johndoe/posts/?page=1&per_page
           "file_size": 2048576
         }
       ],
+      "mentions": [],
+      "attributes": {
+        "type": "project",
+        "status": "launched"
+      },
       "likes_count": 25,
       "dislikes_count": 2,
       "comments_count": 8,
@@ -1063,6 +1249,49 @@ curl -X GET "http://89.106.206.119:8000/api/users/johndoe/posts/?page=1&per_page
     "has_next": true,
     "has_previous": false
   }
+}
+```
+
+### Upload Category Format (Superusers only)
+```bash
+curl -X POST http://89.106.206.119:8000/api/posts/formats/upload/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
+  -F "category=products" \
+  -F "format_file=@/path/to/format.json"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Format uploaded successfully",
+  "format": {
+    "id": 1,
+    "category": "products",
+    "format_file": "/media/category_formats/format_12345.json",
+    "file_url": "/media/category_formats/format_12345.json",
+    "created_by": 1,
+    "created_by_info": {
+      "id": 1,
+      "username": "admin"
+    },
+    "created_at": "2024-01-16T11:00:00Z",
+    "updated_at": "2024-01-16T11:00:00Z"
+  }
+}
+```
+
+### Delete Category Format (Superusers only)
+```bash
+curl -X DELETE http://89.106.206.119:8000/api/posts/formats/products/delete/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Format deleted successfully"
 }
 ```
 
@@ -1590,7 +1819,7 @@ curl -X PUT http://89.106.206.119:8000/api/messages/1/update/ \
 
 ### Upload Category Format (Superuser Only)
 ```bash
-curl -X POST http://89.106.206.119:8000/api/formats/upload/ \
+curl -X POST http://89.106.206.119:8000/api/posts/formats/upload/ \
   -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
   -H "Content-Type: multipart/form-data" \
   -F "category=programming" \
@@ -1627,7 +1856,7 @@ curl -X POST http://89.106.206.119:8000/api/formats/upload/ \
 
 ### Get Category Format (Public)
 ```bash
-curl -X GET http://89.106.206.119:8000/api/formats/programming/
+curl -X GET http://89.106.206.119:8000/posts/api/formats/programming/
 ```
 
 **Response:**
@@ -1656,7 +1885,7 @@ curl -X GET http://89.106.206.119:8000/api/formats/programming/
 
 ### Delete Category Format (Superuser Only)
 ```bash
-curl -X DELETE http://89.106.206.119:8000/api/formats/programming/delete/ \
+curl -X DELETE http://89.106.206.119:8000/posts/api/formats/programming/delete/ \
   -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
   -H "Content-Type: application/json"
 ```
@@ -1845,7 +2074,7 @@ curl -X GET http://89.106.206.119:8000/api/wallet/transactions/ \
 
 ---
 
-### 🛒 Purchase Post/Item
+### 🛒 In-App Purchase Post/Item
 
 #### Request
 ```bash
@@ -1866,6 +2095,40 @@ curl -X POST http://89.106.206.119:8000/api/wallet/purchase/8/ \
 }
 ```
 
+### 🛒 Create fake gateway link Post/Item
+
+#### Request
+```bash
+curl -X POST http://89.106.206.119:8000/api/wallet/payment/create/8/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+```
+*Note: No request body needed. Price is taken from post attributes.*
+
+#### Response
+```json
+{
+    "error": false,
+    "message": "لینک پرداخت با موفقیت ساخته شد",
+    "code": "PAYMENT_CREATED",
+    "data": {
+        "payment_url": "/fake-gateway/5d9d7a1b-756b-4c81-995e-812967720b182/"
+    }
+}
+```
+
+### ✅ Payment verification
+
+#### Request
+```bash
+curl -X POST http://89.106.206.119:8000/api/wallet/payment/verify/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+  -H "Content-Type: application/json" \
+  -d '{"authority": "5d9d7a1b-756b-4c81-995e-812967720b182"}'
+```
+#### Response
+
+
+
 ### 📝 Post Attributes Schema
 
 Posts being purchased must have the following attributes structure:
@@ -1884,6 +2147,18 @@ Posts being purchased must have the following attributes structure:
 ```
 
 ## 📁 Log File Management
+
+### Via Admin Panel (others are just for command line):
+
+```text
+|-admin/
+  |-logs/
+    |-viewer/
+    |-download/
+    |-clear/
+    |-statistics/
+```
+
 
 ### List Log Files
 **GET** `/api/logs/files/`

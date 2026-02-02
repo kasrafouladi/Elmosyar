@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.db import transaction
+from posts.models import Post
 
 User = settings.AUTH_USER_MODEL
 
@@ -25,9 +26,9 @@ class Transaction(models.Model):
     
     TYPE = [
         ('withdraw', 'Withdraw'),
-        ('deposit', 'Diposit'),
+        ('deposit', 'Deposit'),
         ('payment', 'Payment'),
-        ('recieve', 'Recieve'),
+        ('receive', 'Receive'),
         ('refund', 'Refund')
     ]
     
@@ -37,7 +38,13 @@ class Transaction(models.Model):
     status = models.CharField(max_length=10, choices=STATUS, default='pending')
     type = models.CharField(max_length=10, choices=TYPE)
     from_user = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True, related_name='paid_transactions')
-    to_user = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True, related_name='recieved_transactions')
+    to_user = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True, related_name='received_transactions')
+    is_processed = models.BooleanField(default=False)
+    authority = models.CharField(max_length=100, null=True, blank=True)
+    post = models.OneToOneField(Post, on_delete=models.SET_NULL, blank=True, null=True, related_name='transaction')
+    
+    def __str__(self):
+        return str(self.id)
     
 
 class WalletError(Exception):
@@ -52,20 +59,22 @@ class WalletService:
     @transaction.atomic
     def deposit(user, amount):
         try:
-            wallet, _ = UserWallet.objects.select_for_update().get_or_create(user=user)
+            wallet = UserWallet.objects.select_for_update().get(user=user)
             wallet.balance += amount
             wallet.save()
 
             Transaction.objects.create(
                 wallet=wallet,
                 amount=amount,
-                type="deposite",
+                type="deposit",
                 status="success",
                 from_user=user
             )
             
             return f"مبلغ {amount} به با موفقیت کیف پول شما اضافه شد", "DEPOSIT_SUCCESS", {"balance" : wallet.balance}
         
+        except UserWallet.DoesNotExist :
+           raise WalletError("کیف پول یافت نشد")
         except Exception as e:
             raise WalletError("مشکلی پیش آمده لطفا دوباره سعی کنید") from e
         
@@ -75,7 +84,7 @@ class WalletService:
     @transaction.atomic
     def withdraw(user, amount):
         try:
-            wallet, _ = UserWallet.objects.select_for_update().get_or_create(user=user)
+            wallet = UserWallet.objects.select_for_update().get(user=user)
 
             if wallet.balance < amount:
                 raise InsufficientBalance("موجودی کافی نمیباشد")
@@ -92,7 +101,9 @@ class WalletService:
             )
 
             return f"مبلغ {amount} با موفقیت از کیف پول شما کسر شد", "WITHDRAW_SUCCESS", {"balance" : wallet.balance}
-
+        
+        except UserWallet.DoesNotExist :
+            raise WalletError("کیف پول یافت نشد")
         except InsufficientBalance:
             raise
         except Exception as e:
@@ -103,12 +114,12 @@ class WalletService:
     
     @staticmethod
     @transaction.atomic
-    def purchase_or_transfer(from_user, to_user, amount, is_purchase=False):
+    def purchase_or_transfer(from_user, to_user, amount, is_purchase=False, authority=None, post=None):
         try:
-            # اطمینان از وجود کیف پول فرستنده و گیرنده
-            sender_wallet, _ = UserWallet.objects.select_for_update().get_or_create(user=from_user)
-            receiver_wallet, _ = UserWallet.objects.select_for_update().get_or_create(user=to_user)
-
+            wallets = (UserWallet.objects.select_for_update().filter(user_id__in=sorted([from_user.id, to_user.id])))
+            sender_wallet = next(w for w in wallets if w.user.id == from_user.id)
+            receiver_wallet = next(w for w in wallets if w.user.id != from_user.id)
+            
             if sender_wallet.balance < amount:
                 raise InsufficientBalance("موجودی کافی نمیباشد")
 
@@ -118,30 +129,41 @@ class WalletService:
             sender_wallet.save()
             receiver_wallet.save()
 
-            Transaction.objects.create(
-                wallet=sender_wallet,
-                amount=amount,
-                type="payment",
-                status="success",
-                from_user=from_user,
-                to_user=to_user
-            )
-
+            if authority is not None:
+                transac = Transaction.objects.get(
+                    from_user=from_user,
+                    authority=authority
+                )
+                transac.status = "success"
+                transac.is_processed = True
+                transac.save()
+            
+            else:
+                Transaction.objects.create(
+                    wallet=sender_wallet,
+                    amount=amount,
+                    type="payment",
+                    status="success",
+                    from_user=from_user,
+                    to_user=to_user,
+                    post=post
+                )
+            
             Transaction.objects.create(
                 wallet=receiver_wallet,
                 amount=amount,
-                type="recieve",
+                type="receive",
                 status="success",
                 from_user=from_user,
-                to_user=to_user
+                to_user=to_user,
+                post=post
             )
             if is_purchase:
-                return f"خرید با موفقیت انجام شد", "PURCHASE_SUCCESS", {"balance": sender_wallet.balance}
-
-            return f"مبلغ {amount} با موفقیت منتقل شد", "TRANSFER_SUCCESS", {"balance": sender_wallet.balance}
+                return f"خرید با موفقیت انجام شد", "PURCHASE_SUCCESS", {"balance" : sender_wallet.balance}
+            
+            return f"مبلغ {amount} با موفقیت منتقل شد", "TRANSFER_SUCCESS", {"balance" : sender_wallet.balance}
 
         except InsufficientBalance:
             raise
         except Exception as e:
-            print("REAL ERROR:", type(e), e)
             raise WalletError("مشکلی پیش آمده لطفا دوباره سعی کنید") from e
