@@ -108,43 +108,80 @@ class RefreshTokenView(APIView):
             refresh = RefreshToken(refresh_token)
             
             # گرفتن اطلاعات کاربر از توکن
-            user_id = refresh.get('user_id')
-            if user_id:
-                user = User.objects.get(id=user_id)
-                # ساخت refresh token جدید
-                new_refresh = RefreshToken.for_user(user)
-                
-                # بررسی remember_me از توکن قبلی
+            try:
+                user_id = refresh['user_id']
                 remember_me = refresh.get('remember_me', False)
-                
-                log_info("Token refreshed successfully", request, {'user_id': user_id})
-                
-                # ایجاد response
-                response_data = {
-                    'success': True,
-                    'access': str(new_refresh.access_token)
-                }
-                
-                response = Response(response_data, status=status.HTTP_200_OK)
-                
-                # قرار دادن refresh token جدید در کوکی
-                response = set_refresh_token_cookie(response, str(new_refresh), remember_me)
-                
-                return response
-            else:
-                log_error("Refresh token does not contain user_id", request, {'token_preview': refresh_token[:20]})
+            except KeyError:
+                # اگر user_id در توکن نیست، سعی می‌کنیم از طریق claim‌های استاندارد کاربر را پیدا کنیم
+                # در simplejwt معمولاً user_id به صورت مستقیم در payload نیست
+                # باید از token.blacklist() استفاده کنیم یا توکن را decode کنیم
+                log_error("Refresh token does not contain required claims", request, {'token_preview': refresh_token[:20]})
                 return Response({
                     'success': False,
-                    'message': 'Invalid refresh token'
+                    'message': 'Invalid refresh token structure'
                 }, status=status.HTTP_400_BAD_REQUEST)
-                
+            
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                log_error(f"User not found for refresh token", request, {'user_id': user_id})
+                return Response({
+                    'success': False,
+                    'message': 'User not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # بررسی اینکه کاربر active است
+            if not user.is_active:
+                log_warning(f"Refresh attempt for inactive user", request, {'user_id': user_id})
+                return Response({
+                    'success': False,
+                    'message': 'User account is inactive'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # ایجاد refresh token جدید
+            new_refresh = RefreshToken.for_user(user)
+            new_refresh['remember_me'] = remember_me
+            new_refresh['user_id'] = user.id
+            
+            if remember_me:
+                new_refresh.set_exp(lifetime=timedelta(days=7))
+            
+            # باطل کردن توکن قدیمی (اگر blacklist فعال باشد)
+            try:
+                refresh.blacklist()
+            except:
+                # اگر blacklist فعال نباشد، این خطا را نادیده بگیر
+                pass
+            
+            log_info("Token refreshed successfully", request, {
+                'user_id': user_id,
+                'remember_me': remember_me
+            })
+            
+            response_data = {
+                'success': True,
+                'access': str(new_refresh.access_token)
+            }
+            
+            response = Response(response_data, status=status.HTTP_200_OK)
+            
+            # قرار دادن refresh token جدید در کوکی
+            response = set_refresh_token_cookie(response, str(new_refresh), remember_me)
+            
+            return response
+            
+        except TokenError as e:
+            log_error(f"Token refresh failed (TokenError): {str(e)}", request, {'token_preview': refresh_token[:20]})
+            return Response({
+                'success': False,
+                'message': 'Invalid or expired refresh token'
+            }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             log_error(f"Token refresh failed: {str(e)}", request, {'token_preview': refresh_token[:20]})
             return Response({
                 'success': False,
-                'message': 'Invalid refresh token'
-            }, status=status.HTTP_400_BAD_REQUEST)
-
+                'message': 'Refresh token processing failed'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # ════════════════════════════════════════════════════════════
 # 🔐 Authentication Endpoints
@@ -334,7 +371,6 @@ class LoginView(APIView):
         password = serializer.validated_data['password']
         remember_me = serializer.validated_data.get('rememberMe', False)
         
-        # Find user by username or email
         user = User.objects.filter(
             Q(email=username_or_email) | Q(username=username_or_email)
         ).first()
@@ -364,6 +400,11 @@ class LoginView(APIView):
 
             # Generate JWT tokens
             refresh = RefreshToken.for_user(user)
+            
+            # اضافه کردن remember_me به payload توکن
+            refresh['remember_me'] = remember_me
+            refresh['user_id'] = user.id
+            
             if remember_me:
                 refresh.set_exp(lifetime=timedelta(days=7))
             
@@ -373,7 +414,6 @@ class LoginView(APIView):
                 'remember_me': remember_me
             })
             
-            # ایجاد response
             response_data = {
                 'success': True,
                 'message': 'Login successful',
@@ -413,8 +453,14 @@ class LogoutView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            token = RefreshToken(refresh_token)
-            token.blacklist()
+            # فقط سعی کن توکن را blacklist کن
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            except Exception as e:
+                # اگر blacklist نشد، لاگ کن اما ادامه بده
+                log_warning(f"Could not blacklist token: {str(e)}", request)
+            
             log_info("User logged out successfully", request)
             
             response = Response({
@@ -422,17 +468,19 @@ class LogoutView(APIView):
                 'message': 'Logout successful'
             }, status=status.HTTP_200_OK)
             
-            # حذف کوکی
+            # حذف کوکی در هر صورت
             response = delete_refresh_token_cookie(response)
             
             return response
         except Exception as e:
-            log_error(f"Logout failed: {str(e)}", request, {'token_preview': refresh_token[:20]})
-            return Response({
+            log_error(f"Logout failed: {str(e)}", request)
+            # حتی اگر خطا هم داد، کوکی را پاک کن
+            response = Response({
                 'success': False,
-                'message': 'Invalid token'
+                'message': 'Logout partially completed'
             }, status=status.HTTP_400_BAD_REQUEST)
-
+            response = delete_refresh_token_cookie(response)
+            return response
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
