@@ -391,19 +391,29 @@ def get_purchased_posts(request):
                          "message": "کیف پول یافت نشد",
                          "code": "USER_WALLET_NOT_FOUND"}, status=status.HTTP_404_NOT_FOUND)
         
-    posts = Post.objects.filter(transaction__wallet=wallet, transaction__type="payment")
-    if not posts.exists():
+    # تغییر از transaction__type="payment" به فیلتر کردن تراکنش‌های payment کاربر
+    transactions = Transaction.objects.filter(
+        wallet=wallet, 
+        type="payment",
+        status="success"
+    ).select_related('post')
+    
+    posts = [trans.post for trans in transactions if trans.post]
+    
+    if not posts:
         log_info(f"No payment transactions found for user", request)
         return Response({"error": True,
                          "message": "تراکنش خریدی وجود ندارد",
                          "code": "USER_TRANSACTION_NOT_EXIST"}, status=status.HTTP_200_OK)
-    log_info(f"User viewed purchased transactions history ({posts.count()} transactions)", request)
+    
+    log_info(f"User viewed purchased transactions history ({len(posts)} transactions)", request)
     
     serializer = PostSerializer(posts, many=True)
     return Response({"error": False,
                      "message": "پست های خریداری شده کاربر یافت شد",
                      "code": "USER_TRANSACTION_FETCHED",
                      "data": serializer.data}, status=status.HTTP_200_OK)
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -417,17 +427,25 @@ def get_sold_posts(request):
                          "message": "کیف پول یافت نشد",
                          "code": "USER_WALLET_NOT_FOUND"}, status=status.HTTP_404_NOT_FOUND)
         
-    posts = Post.objects.filter(transaction__wallet=wallet, transaction__type="recieve")
+    # تصحیح typo: "recieve" -> "receive"
+    transactions = Transaction.objects.filter(
+        wallet=wallet, 
+        type="receive",  # تصحیح شده
+        status="success"
+    ).select_related('post')
+    
+    posts = [trans.post for trans in transactions if trans.post]
+    
     if not posts.exists():
-        log_info(f"No recieved transactions found for user", request)
+        log_info(f"No received transactions found for user", request)
         return Response({"error": True,
                          "message": "تراکنش فروشی وجود ندارد",
                          "code": "USER_TRANSACTION_NOT_EXIST"}, status=status.HTTP_200_OK)
-    log_info(f"User viewed recieved transactions history ({posts.count()} transactions)", request)
+    
+    log_info(f"User viewed received transactions history ({len(posts)} transactions)", request)
     
     serializer = PostSerializer(posts, many=True)
     return Response({"error": False,
                      "message": "پست های فروخته شده کاربر یافت شد",
                      "code": "USER_TRANSACTION_FETCHED",
                      "data": serializer.data}, status=status.HTTP_200_OK)
-

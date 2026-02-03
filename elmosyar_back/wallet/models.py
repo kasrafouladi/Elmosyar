@@ -41,7 +41,7 @@ class Transaction(models.Model):
     to_user = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True, related_name='received_transactions')
     is_processed = models.BooleanField(default=False)
     authority = models.CharField(max_length=100, null=True, blank=True)
-    post = models.OneToOneField(Post, on_delete=models.SET_NULL, blank=True, null=True, related_name='transaction')
+    post = models.ForeignKey(Post, on_delete=models.SET_NULL, blank=True, null=True, related_name='transactions')
     
     def __str__(self):
         return str(self.id)
