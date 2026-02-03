@@ -42,7 +42,7 @@ def set_refresh_token_cookie(response, refresh_token, remember_me=False):
     
     if remember_me:
         cookie_kwargs['max_age'] = 7 * 24 * 60 * 60  # 7 روز به ثانیه
-        cookie_kwargs['expires'] = timezone.now() + timedelta(days=7)
+        #cookie_kwargs['expires'] = timezone.now() + timedelta(days=7)
     
     response.set_cookie(**cookie_kwargs)
     return response
