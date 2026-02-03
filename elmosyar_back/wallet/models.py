@@ -76,6 +76,7 @@ class WalletService:
         except UserWallet.DoesNotExist :
            raise WalletError("کیف پول یافت نشد")
         except Exception as e:
+            print("in deposit", flush=True)
             raise WalletError(e) from e
         
     
@@ -107,6 +108,7 @@ class WalletService:
         except InsufficientBalance:
             raise
         except Exception as e:
+            print("in withdraw", flush=True)
             raise WalletError(e) from e
         
 
@@ -166,4 +168,5 @@ class WalletService:
         except InsufficientBalance:
             raise
         except Exception as e:
+            print("in transfer", flush=True)
             raise WalletError(e) from e
