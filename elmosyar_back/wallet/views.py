@@ -436,7 +436,7 @@ def get_sold_posts(request):
     
     posts = [trans.post for trans in transactions if trans.post]
     
-    if not posts.exists():
+    if len(posts) == 0:
         log_info(f"No received transactions found for user", request)
         return Response({"error": True,
                          "message": "تراکنش فروشی وجود ندارد",
