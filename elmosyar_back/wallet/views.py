@@ -267,7 +267,7 @@ def create_payment(request, post_id):
                          "message": "امکان خرید توسط فروشنده وجود ندارد",
                          "code": "POST_PURCHASE_NOT_ALLOWED"}, status=status.HTTP_409_CONFLICT)
         
-    if post.attributes.get('isSoldOut') == True:
+    if post.attributes.get('isSoldOut') == "true":
         log_warning(f"Purchase attempt for sold out post", request, {'post_id': post_id})
         return Response({"error": True,
                          "message": "این آیتم قبلا به فروش رفته است",
