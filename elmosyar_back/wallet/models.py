@@ -168,5 +168,6 @@ class WalletService:
         except InsufficientBalance:
             raise
         except Exception as e:
+            print(f"from:{from_user}, to user:{to_user}, amount:{amount}, is_purchase:{is_purchase}, autority:{authority}, post:{post}")
             print("in transfer", flush=True)
             raise WalletError(e) from e
