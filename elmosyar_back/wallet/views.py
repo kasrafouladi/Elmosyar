@@ -230,6 +230,7 @@ def purchase(request, post_id):
         post.author,
         price,
         True,
+        post.id,
         post
     )
 
