@@ -230,7 +230,7 @@ def purchase(request, post_id):
         post.author,
         price,
         True,
-        post.id,
+        None,
         post
     )
 
@@ -295,7 +295,7 @@ def create_payment(request, post_id):
         type="payment",
         from_user=request.user,
         to_user=post.author,
-        authority=post.id,
+        authority=str(uuid.uuid4())+str(post.pk),
         post=post
     )
     
