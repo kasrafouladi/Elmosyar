@@ -332,7 +332,7 @@ def verify_payment(request):
                     "code": "POST_SOLD"}, status=status.HTTP_410_GONE)
             
             post = Post.objects.select_for_update().get(pk=transac.post.id)
-            if post.attributes.get('isSoldOut'):
+            if post.attributes.get('isSoldOut') == "true":
                 return Response({
                     "error": True,
                     "message": "این آیتم قبلا به فروش رفته است",
