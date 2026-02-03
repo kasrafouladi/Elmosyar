@@ -236,7 +236,7 @@ def purchase(request, post_id):
 
     if response.status_code == 200:
         attrs = post.attributes.copy()
-        attrs["isSoldOut"] = True
+        attrs["isSoldOut"] = "true"
 
         post.attributes = attrs
         post.save(update_fields=["attributes"])
@@ -351,7 +351,7 @@ def verify_payment(request):
 
                 if response.status_code == 200:
                     attrs = post.attributes.copy()
-                    attrs["isSoldOut"] = True
+                    attrs["isSoldOut"] = "true"
                     post.attributes = attrs
                     post.save(update_fields=["attributes"])
 
