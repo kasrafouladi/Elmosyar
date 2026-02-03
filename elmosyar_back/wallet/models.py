@@ -76,7 +76,7 @@ class WalletService:
         except UserWallet.DoesNotExist :
            raise WalletError("کیف پول یافت نشد")
         except Exception as e:
-            raise WalletError("مشکلی پیش آمده لطفا دوباره سعی کنید") from e
+            raise WalletError(e) from e
         
     
     
@@ -107,7 +107,7 @@ class WalletService:
         except InsufficientBalance:
             raise
         except Exception as e:
-            raise WalletError("مشکلی پیش آمده لطفا دوباره سعی کنید") from e
+            raise WalletError(e) from e
         
 
     
@@ -166,4 +166,4 @@ class WalletService:
         except InsufficientBalance:
             raise
         except Exception as e:
-            raise WalletError("مشکلی پیش آمده لطفا دوباره سعی کنید") from e
+            raise WalletError(e) from e
