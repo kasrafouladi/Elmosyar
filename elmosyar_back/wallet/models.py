@@ -150,7 +150,7 @@ class WalletService:
                     to_user=to_user,
                     post=post
                 )
-            """
+            
             Transaction.objects.create(
                 wallet=receiver_wallet,
                 amount=amount,
@@ -160,7 +160,7 @@ class WalletService:
                 to_user=to_user,
                 post=post
             )
-            """
+            
             if is_purchase:
                 return f"خرید با موفقیت انجام شد", "PURCHASE_SUCCESS", {"balance" : sender_wallet.balance}
             
