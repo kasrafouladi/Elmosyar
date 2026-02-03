@@ -295,7 +295,7 @@ def create_payment(request, post_id):
         type="payment",
         from_user=request.user,
         to_user=post.author,
-        authority=str(uuid.uuid4())+str(post.pk),
+        authority=post.id,
         post=post
     )
     
